@@ -1,0 +1,15 @@
+Parte 1: Login de usuário e criação de canais
+
+A primeira parte que iremos implementar é o começo da interação do bot (cliente) com o servidor. Para isso, o bot deve conseguir fazer login no serviço, listar os canais disponíveis e criar novos canais (a publicação das mensagens será realizada na próxima parte do projeto).
+Definições sobre troca de mensagens
+
+Como esta é a primeira parte do projeto, ela contém definições do que será usado nas partes seguintes do projeto, ou seja, algumas escolhas feitas agora deverão ser seguidas nas próximas partes.
+O formato da mensagem que será trocada deve ser definido pelo grupo (considerando que esta mensagem deverá funcionar com todos os servidores e clientes que serão desenvolvidos), porém existem 2 itens que são obrigatórios:
+
+Todas as mensagens devem conter o timestamp do envio
+As mensagens devem ser serializadas em binário usando algum formato conhecido (e.g., ProtoBuff, Apache Avro, Thrift, MessagePack, etc). Não podem ser envidas mensagens usando JSON, XML ou texto simples.
+
+Para as próximas partes, as mensagens deverão manter o formato de serialização escolhido e devem conter o timestamp do envio.
+Login do usuário
+
+O primeiro passo é realizar o login do bot assim que o serviço estiver disponível. Como este projeto é um protótipo, não vamos ter senhas, somente o nome do usuário. Neste caso, a troca de mensagem entre o usuário e o servidor será:

@@ -10,7 +10,7 @@ services:
       - 5555:5555
     deploy:
       replicas: 1
-
+#duplicar trocando nuero da replica
   cliente:
     build:
       context: .

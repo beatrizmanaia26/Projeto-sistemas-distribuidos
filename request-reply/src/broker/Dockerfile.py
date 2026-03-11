@@ -4,4 +4,4 @@ WORKDIR /app
 
 RUN pip install pyzmq
 
-CMD ["python", "main.py"]
+CMD ["python", "/app/main.py"]

@@ -1,37 +1,53 @@
+version: "3.8"
+
 services:
 
   broker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.py
     image: cc7261:pyzmq
     container_name: broker
     volumes:
       - ./broker.py:/app/main.py
     ports:
-      - 5555:5555
-      - 5556:5556
+      - "5555:5555"
+      - "5556:5556"
 
-  servidor:
+  servidorPython:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.py
     image: cc7261:pyzmq
     volumes:
-      - ./servidor.py:/app/main.py
+      - ./servidorPython.py:/app/main.py
     depends_on:
       - broker
-    deploy:
-      replicas: 1
 
-  cliente:
+  clientePython:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.py
     image: cc7261:pyzmq
     volumes:
-      - ./cliente.py:/app/main.py
+      - ./clientePython.py:/app/main.py
     depends_on:
-      - servidor
-    deploy:
-      replicas: 1
+      - broker
+
+  servidorJava:
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+    volumes:
+      - ./servidorJava.java:/app/main.java
+    depends_on:
+      - broker
+
+  clienteJava:
+    build:
+      context: .
+      dockerfile: Dockerfile.java
+    volumes:
+      - ./clienteJava.java:/app/main.java
+    depends_on:
+      - broker
