@@ -1,12 +1,10 @@
-version: "3.8"
-
 services:
 
   broker:
     build:
       context: .
       dockerfile: Dockerfile.py
-    image: cc7261:pyzmq
+    image: broker-pyzmq:latest 
     container_name: broker
     volumes:
       - ./broker.py:/app/main.py
@@ -15,22 +13,16 @@ services:
       - "5556:5556"
 
   servidorPython:
-    build:
-      context: .
-      dockerfile: Dockerfile.py
-    image: cc7261:pyzmq
+    image: broker-pyzmq:latest #retirei o build dockerfile e imge pq todos os containers python usam a mesma img base, cria 1x no broker e reusa
     volumes:
-      - ./servidorPython.py:/app/main.py
+      - ./servidor.py:/app/main.py
     depends_on:
       - broker
 
   clientePython:
-    build:
-      context: .
-      dockerfile: Dockerfile.py
-    image: cc7261:pyzmq
+    image: broker-pyzmq:latest
     volumes:
-      - ./clientePython.py:/app/main.py
+      - ./cliente.py:/app/main.py
     depends_on:
       - broker
 
@@ -38,16 +30,18 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.java
+    image: broker-java:latest
     volumes:
-      - ./servidorJava.java:/app/main.java
+      - ./servidor.java:/app/servidor.java
     depends_on:
       - broker
+      #Java precisa que o nome do arquivo corresponda ao nome da classe. Com o comando explícito, cada container compila e executa a classe correta.
+    command: sh -c "javac -cp '/app/lib/*' /app/servidor.java && java -cp '/app:/app/lib/*' servidor"
 
   clienteJava:
-    build:
-      context: .
-      dockerfile: Dockerfile.java
+    image: broker-java:latest
     volumes:
-      - ./clienteJava.java:/app/main.java
+      - ./cliente.java:/app/cliente.java
     depends_on:
       - broker
+    command: sh -c "javac -cp '/app/lib/*' /app/cliente.java && java -cp '/app:/app/lib/*' cliente"
