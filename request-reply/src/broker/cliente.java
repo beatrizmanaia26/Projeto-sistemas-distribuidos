@@ -1,70 +1,61 @@
 import org.zeromq.ZMQ;
 import org.zeromq.ZContext;
-import org.json.JSONObject;
 
-class cliente {
+class cliente { 
     public static void main(String[] args) {
         try (ZContext context = new ZContext()) {
+            //ZeroMQ
             ZMQ.Socket socket = context.createSocket(ZMQ.REQ);
             socket.connect("tcp://broker:5555");
             
-            System.out.println("Cliente Java conectado ao broker");
+            System.out.println(" Cliente Java Iniciado");
             
-            int i = 0;
-            while (true) {
-                // Mensagem 1: criar
-                JSONObject msg1 = new JSONObject();
-                msg1.put("fazer", "criar");
-                msg1.put("msg", "eba");
-                
-                System.out.print("Mensagem " + i + ": ");
-                System.out.flush();
-                socket.send(msg1.toString().getBytes(ZMQ.CHARSET), 0);
-                String resposta1 = new String(socket.recv(0), ZMQ.CHARSET);
-                System.out.println(resposta1);
-                
-                Thread.sleep(500);
-                
-                // Mensagem 2: remover
-                JSONObject msg2 = new JSONObject();
-                msg2.put("fazer", "remover");
-                msg2.put("msg", "eba2");
-                
-                System.out.print("Mensagem " + i + ": ");
-                System.out.flush();
-                socket.send(msg2.toString().getBytes(ZMQ.CHARSET), 0);
-                String resposta2 = new String(socket.recv(0), ZMQ.CHARSET);
-                System.out.println(resposta2);
-                
-                Thread.sleep(500);
-                
-                // Mensagem 3: criar
-                JSONObject msg3 = new JSONObject();
-                msg3.put("fazer", "criar");
-                msg3.put("msg", "eba3");
-                
-                System.out.print("Mensagem " + i + ": ");
-                System.out.flush();
-                socket.send(msg3.toString().getBytes(ZMQ.CHARSET), 0);
-                String resposta3 = new String(socket.recv(0), ZMQ.CHARSET);
-                System.out.println(resposta3);
-                
-                Thread.sleep(500);
-                
-                // Mensagem 4: listar
-                JSONObject msg4 = new JSONObject();
-                msg4.put("fazer", "listar");
-                msg4.put("msg", "eba4");
-                
-                System.out.print("Mensagem " + i + ": ");
-                System.out.flush();
-                socket.send(msg4.toString().getBytes(ZMQ.CHARSET), 0);
-                String resposta4 = new String(socket.recv(0), ZMQ.CHARSET);
-                System.out.println(resposta4);
-                
-                Thread.sleep(500);
-                i++;
+            // Bot automático
+            boolean loggedIn = false;
+            String username = "bot_java_1";
+            
+            // Retry em caso de erro
+            while (!loggedIn) {
+                try {
+                    Message loginMsg = new Message("login");
+                    loginMsg.setUsername(username);
+                    
+                    byte[] msgBytes = MessagePackUtil.serialize(loginMsg);
+                    
+                    System.out.println("\nENVIANDO LOGIN!!");
+                    System.out.println("Tipo: " + loginMsg.getType());
+                    System.out.println("Username: " + loginMsg.getUsername());
+                    System.out.println("Timestamp: " + loginMsg.getTimestamp());
+                    System.out.println("Bytes enviados: " + msgBytes.length);
+                    
+                    // Enviar pelo ZeroMQ
+                    socket.send(msgBytes, 0);
+                    
+                    // Aguardar UMA resposta
+                    byte[] responseBytes = socket.recv(0);
+                    Response response = MessagePackUtil.deserialize(responseBytes, Response.class);
+                  
+                    System.out.println("\nRESPOSTA RECEBIDA!!");
+                    System.out.println("Success: " + response.isSuccess());
+                    System.out.println("Message: " + response.getMessage());
+                    System.out.println("Timestamp: " + response.getTimestamp());
+                    
+                    if (response.isSuccess()) {
+                        loggedIn = true;
+                        System.out.println("\nLOGIN BEM-SUCEDIDO UHULLL\n");
+                    } else {
+                        System.out.println("\n ERRO NO LOGIN - Tentando novamente em 2s\n");
+                        Thread.sleep(2000);
+                    }
+                    
+                } catch (Exception e) {
+                    System.err.println("Erro: " + e.getMessage());
+                    Thread.sleep(2000);
+                }
             }
+            
+            System.out.println("Bot Logado com Sucesso");
+            
         } catch (Exception e) {
             e.printStackTrace();
         }

@@ -1,3 +1,4 @@
+"""
 import json
 import zmq
 
@@ -45,3 +46,4 @@ while True:
         socket.send_string(resposta)
 
     print(f"Mensagem recebida: {message}", flush=True)
+    """

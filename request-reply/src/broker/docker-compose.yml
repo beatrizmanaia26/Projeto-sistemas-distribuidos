@@ -33,15 +33,22 @@ services:
     image: broker-java:latest
     volumes:
       - ./servidor.java:/app/servidor.java
+      - ./Message.java:/app/Message.java
+      - ./Response.java:/app/Response.java
+      - ./MessagePackUtil.java:/app/MessagePackUtil.java
+      - ./data_java:/app/data:rw
     depends_on:
       - broker
       #Java precisa que o nome do arquivo corresponda ao nome da classe. Com o comando explícito, cada container compila e executa a classe correta.
-    command: sh -c "javac -cp '/app/lib/*' /app/servidor.java && java -cp '/app:/app/lib/*' servidor"
+    command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor"
 
   clienteJava:
     image: broker-java:latest
     volumes:
       - ./cliente.java:/app/cliente.java
+      - ./Message.java:/app/Message.java
+      - ./Response.java:/app/Response.java
+      - ./MessagePackUtil.java:/app/MessagePackUtil.java
     depends_on:
       - broker
-    command: sh -c "javac -cp '/app/lib/*' /app/cliente.java && java -cp '/app:/app/lib/*' cliente"
+    command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' cliente"

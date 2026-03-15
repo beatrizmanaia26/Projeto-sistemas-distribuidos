@@ -1,3 +1,4 @@
+""""
 import zmq
 from time import sleep
 import json #eniar json do cliente p servidor
@@ -42,3 +43,4 @@ while True:
     print(f"{mensagem}")
     sleep(0.5)
     i += 1
+"""
