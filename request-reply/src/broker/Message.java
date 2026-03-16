@@ -2,7 +2,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class Message {
     @JsonProperty("type")
-    private String type;  // "login"
+    private String type;  // "login", "create_channel", etc
     
     @JsonProperty("timestamp")
     private long timestamp;  // Timestamp obrigatório
@@ -10,8 +10,11 @@ public class Message {
     @JsonProperty("username")
     private String username;
     
+    @JsonProperty("channel_name")
+    private String channelName; 
+    
     public Message() {
-        this.timestamp = System.currentTimeMillis();  
+        this.timestamp = System.currentTimeMillis();
     }
     
     public Message(String type) {
@@ -27,4 +30,7 @@ public class Message {
     
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+    
+    public String getChannelName() { return channelName; }
+    public void setChannelName(String channelName) { this.channelName = channelName; }
 }

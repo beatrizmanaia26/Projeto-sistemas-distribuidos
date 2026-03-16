@@ -55,6 +55,48 @@ class cliente {
             }
             
             System.out.println("Bot Logado com Sucesso");
+    
+            System.out.println("CRIANDO CANAL");
+            
+            String nomeCanal = "canal-java-bot"; 
+            try {
+                // mensagem de criação de canal
+                Message createChannelMsg = new Message("create_channel");
+                createChannelMsg.setUsername(username);  // Enviar username para validação
+                createChannelMsg.setChannelName(nomeCanal);
+                
+                byte[] msgBytes = MessagePackUtil.serialize(createChannelMsg);
+                
+                System.out.println("\nENVIAR CRIAÇÃO DE CANAL");
+                System.out.println("Tipo: " + createChannelMsg.getType());
+                System.out.println("Username: " + createChannelMsg.getUsername());
+                System.out.println("Nome do Canal: " + createChannelMsg.getChannelName());
+                System.out.println("Timestamp: " + createChannelMsg.getTimestamp());
+                System.out.println("Bytes enviados: " + msgBytes.length);
+                
+                socket.send(msgBytes, 0);
+                
+                byte[] responseBytes = socket.recv(0);
+                Response response = MessagePackUtil.deserialize(responseBytes, Response.class);
+                
+                System.out.println("\nRESPOSTA RECEBIDA");
+                System.out.println("Success: " + response.isSuccess());
+                System.out.println("Message: " + response.getMessage());
+                System.out.println("Channel Name: " + response.getChannelName());
+                System.out.println("Timestamp: " + response.getTimestamp());
+                
+                if (response.isSuccess()) {
+                    System.out.println("\nCANAL CRIADO COM SUCESSO: " + response.getChannelName());
+                } else {
+                    System.out.println("\nERRO AO CRIAR CANAL: " + response.getMessage());
+                }
+                
+            } catch (Exception e) {
+                System.err.println("Erro ao criar canal: " + e.getMessage());
+                e.printStackTrace();
+            }
+            
+            System.out.println("\nCliente Finalizado :D");
             
         } catch (Exception e) {
             e.printStackTrace();

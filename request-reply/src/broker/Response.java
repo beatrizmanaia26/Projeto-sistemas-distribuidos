@@ -10,6 +10,9 @@ public class Response {
     @JsonProperty("timestamp")
     private long timestamp;  //Timestamp obrigatório
     
+    @JsonProperty("channel_name")
+    private String channelName;  
+    
     public Response() {
         this.timestamp = System.currentTimeMillis();
     }
@@ -27,4 +30,7 @@ public class Response {
     public void setMessage(String message) { this.message = message; }
     
     public long getTimestamp() { return timestamp; }
+    
+    public String getChannelName() { return channelName; }
+    public void setChannelName(String channelName) { this.channelName = channelName; }
 }
