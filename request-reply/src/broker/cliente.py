@@ -23,7 +23,7 @@ class Response:
     success: bool
     message: str
     timestamp: int
-    
+    channel_name:str=""
     @staticmethod
     def unpack(data: bytes) -> "Response":
         d = msgpack.unpackb(data)
@@ -46,6 +46,24 @@ while True:
     print(mensagem.message) #Print sem ter os bytes da mensagem
     sleep(0.5)
 
+    msg= msgpack.packb({"type": "create_channel", "username":"loba", "timestamp": datetime.now(tz=fuso).timestamp()*1000, "channel_name": "teste"})
+    print(f"Mensagem {i}:", end=" ", flush=True)#imprimir no terminal
+    socket.send(msg)#envia pro servidor
+    #mensagem = socket.recv()#rcebe do servidor
+    #print(f"{msgpack.unpackb(mensagem)}") #Print sem ter os bytes da mensagem
+    mensagem = Response.unpack(socket.recv())
+    print(mensagem.message) #Print sem ter os bytes da mensagem
+    sleep(0.5)
+
+
+    msg= msgpack.packb({"type": "listar", "username":"loba", "timestamp": datetime.now(tz=fuso).timestamp()*1000, "channel_name": "teste"})
+    print(f"Mensagem {i}:", end=" ", flush=True)#imprimir no terminal
+    socket.send(msg)#envia pro servidor
+    #mensagem = socket.recv()#rcebe do servidor
+    #print(f"{msgpack.unpackb(mensagem)}") #Print sem ter os bytes da mensagem
+    mensagem = Response.unpack(socket.recv())
+    print(mensagem.message) #Print sem ter os bytes da mensagem
+    sleep(0.5)
 
     """ 
     msg= msgpack.packb({"type": "criar", "username":"eba", "timestamp": datetime.now(tz=fuso).timestamp()*1000})

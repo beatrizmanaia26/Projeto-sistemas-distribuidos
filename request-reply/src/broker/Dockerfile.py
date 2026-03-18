@@ -3,5 +3,5 @@ FROM python:3.13.7-alpine3.21
 WORKDIR /app
 
 RUN pip install pyzmq msgpack
-
+RUN mkdir -p /app/data
 CMD ["python", "/app/main.py"]

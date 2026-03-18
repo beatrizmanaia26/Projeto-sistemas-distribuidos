@@ -16,6 +16,7 @@ services:
     image: broker-pyzmq:latest #retirei o build dockerfile e imge pq todos os containers python usam a mesma img base, cria 1x no broker e reusa
     volumes:
       - ./servidor.py:/app/main.py
+      - ./data_python:/app/data
     depends_on:
       - broker
 

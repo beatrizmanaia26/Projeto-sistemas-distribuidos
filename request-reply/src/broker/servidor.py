@@ -1,107 +1,131 @@
-
 import json
+import os
 import zmq
 import zoneinfo
 from datetime import datetime
 import msgpack
-from dataclasses import dataclass,asdict
+from dataclasses import dataclass, asdict
+import pickle
+
 @dataclass
 class Message:
     type: str
     username: str
     timestamp: int
-    
+    channel_name: str = ""
     @staticmethod
     def unpack(data: bytes) -> "Message":
         d = msgpack.unpackb(data)
         return Message(**d)
 
-# Response — para ENVIAR de volta ao cliente
 @dataclass
 class Response:
     success: bool
     message: str
     timestamp: int = 0
-    
+    channel_name: str=""
     def __post_init__(self):
         if self.timestamp == 0:
             self.timestamp = int(datetime.now().timestamp() * 1000)
     
     def pack(self) -> bytes:
         return msgpack.packb(asdict(self))
+
+# ============ PERSISTÊNCIA ============
+DADOS_FILE = "/app/data/server_data.pkl"
+
+def salvar_dados():
+    os.makedirs("/app/data", exist_ok=True)
+    with open(DADOS_FILE, "wb") as f:  # wb = write binary
+        pickle.dump({
+            "usuarios": usuarios,
+            "tarefas": tarefas,
+            "canais": canais,
+            "logins": logins
+        }, f)
+    print("Dados salvos.", flush=True)
+
+def carregar_dados():
+    global usuarios, tarefas, canais, logins
+    if os.path.exists(DADOS_FILE):
+        with open(DADOS_FILE, "rb") as f:  # rb = read binary
+            dados = pickle.load(f)
+        usuarios = dados.get("usuarios", [])
+        tarefas  = dados.get("tarefas", [])
+        canais   = dados.get("canais", [])
+        logins   = dados.get("logins", [])
+        print(f"Dados carregados: {len(usuarios)} usuários, {len(tarefas)} tarefas", flush=True)
+
+# ============ SETUP ============
 context = zmq.Context()
 socket = context.socket(zmq.REP)
 socket.connect("tcp://broker:5556")
 fuso = zoneinfo.ZoneInfo("America/Sao_Paulo")
-tarefas = list() #lista de tarefas para o servidor processar, add remove pela lista
-usuarios = list()
-logins = list()
+
+tarefas = []
+usuarios = []
+logins = []
+canais = []
 logado = False
+tempo = ""
+
+carregar_dados()  # carrega ao iniciar
+
+# ============ LOOP PRINCIPAL ============
 while True:
-    #message = socket.recv() #recebe mensagem do cliente (no REP sempre começa com recv)
-    msg = Message.unpack(socket.recv()) #converte a string recebida em um dicionário
-    fazer = msg.type; #pega o valor da chave "fazer" do dicionário
-    #tempo = msg["timestamp"]
+    msg = Message.unpack(socket.recv())
+    fazer = msg.type
     resposta = ""
-    # No padrão REQ/REP do ZeroMQ é OBRIGATÓRIO:
-    # REP -> recv -> send -> recv -> send ...
-    # Ou seja, SEMPRE depois de um recv precisamos dar um send.
-    # Se não enviar resposta, o socket entra em estado inválido e dá erro.
+
     if fazer == "login":
         if msg.username in usuarios:
             tempo = msg.timestamp
-            horario = datetime.now(tz=fuso).isoformat()
-            resposta = f"Login realizado com sucesso às {horario}"
-            resposta = Response(success = True, message = f"Login realizado às {horario}")
+            horario = datetime.now(tz=fuso).timestamp()*1000
+            resposta = Response(success=True, message=f"Login realizado às {horario}")
             login = (msg.username, horario)
             logins.append(login)
-            
             logado = True
+            salvar_dados()  # persiste após login
             print(resposta.message, flush=True)
-            
         else:
             usuarios.append(msg.username)
             logado = True
-            resposta = "Cadastro inexistente. Adicionado a lista de usuários..."
-            resposta = Response(success = True, message = f"Cadastro inexistente. Adicionando...")
-            
+            resposta = Response(success=True, message="Cadastro inexistente. Adicionando...")
+            salvar_dados()  # persiste novo usuário
             print(resposta.message, flush=True)
-            
+
     elif logado == True:
         if fazer == "criar":
-            tarefas.append(msg.username + "|" + tempo) #adiciona a mensagem do cliente na lista de tarefas
-            resposta = f"Tarefa '{msg.username}' criada."
-            resposta = Response(success = True, message = f"Tarefa criada")
+            tarefas.append(msg.username + "|" + str(tempo))
+            resposta = Response(success=True, message="Tarefa criada")
+            salvar_dados()  # persiste nova tarefa
             print(resposta.message, flush=True)
 
         elif fazer == "remover":
-            if msg.username in tarefas: #verifica se a mensagem do cliente está na lista de tarefas
-                tarefas.remove(msg.username) #remove da lista
-                resposta = f"Tarefa '{msg.username}' removida às {datetime.now(tz=fuso).isoformat()}."
-                resposta = Response(success = True, message = f"Tarefa removida")
+            if msg.username in tarefas:
+                tarefas.remove(msg.username)
+                resposta = Response(success=True, message="Tarefa removida")
+                salvar_dados()  # persiste remoção
             else:
-                # Mesmo se não encontrar a tarefa, PRECISA responder
-                resposta = f"Tarefa '{msg['username']}' não encontrada às {datetime.now(tz=fuso).isoformat()} ."
-                resposta = Response(success = True, message = f"Tarefa não encontrada :(")
-           
+                resposta = Response(success=False, message=f"Tarefa não encontrada :(")
             print(resposta.message, flush=True)
 
         elif fazer == "listar":
             print(f"Lista de tarefas: {tarefas}", flush=True)
-            resposta = msgpack.packb(tarefas) #transforma lista em string json
-            resposta = Response(success = True, message = f"{tarefas}")
-             #sempre enviar resposta
+            resposta = Response(success=True, message=f"{canais}")
+        
+        elif fazer == "create_channel":
+            canais.append(msg.channel_name)
+            resposta = Response(success=True, message="Canal Criado!!! Yipeeeeee")
+            salvar_dados()
+
 
         else:
-            # Caso inesperado também precisa responder
-            resposta = "Comando inválido."
-            resposta = Response(success = False, message = f"Comando inválido")
+            resposta = Response(success=False, message="Comando inválido")
             print(resposta.message, flush=True)
     else:
-        resposta = "Usuário não logado. Faça login primeiro!"
-        resposta = Response(success = False, message = f"Usuário não logado!")
-        
+        resposta = Response(success=False, message="Usuário não logado!")
         print(resposta.message, flush=True)
+
     print(f"Mensagem recebida: {msg} às {datetime.now(tz=fuso).timestamp() * 1000}", flush=True)
-    #resp = msgpack.packb(resposta)
     socket.send(resposta.pack())
