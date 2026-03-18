@@ -47,6 +47,8 @@ class servidor {
                         response = processarLogin(msg);
                     } else if ("create_channel".equals(msg.getType())) {
                         response = processarCriarCanal(msg);
+                    } else if ("list_channels".equals(msg.getType())) {
+                        response = processarListarCanais(msg);
                     } else {
                         response = new Response(false, "Tipo desconhecido: " + msg.getType());
                     }
@@ -126,6 +128,25 @@ class servidor {
         return response;
     }
     
+     private static Response processarListarCanais(Message msg) {
+        String username = msg.getUsername();
+        
+        if (username == null || !usuariosLogados.contains(username)) {
+            System.out.println("Tentativa de listar canais sem estar logado");
+            return new Response(false, "Você precisa fazer login antes de listar canais");
+        }
+        
+        // Converter Set para List para enviar na resposta
+        List<String> listaCanais = new ArrayList<>(canais);
+        
+        System.out.println("Listando " + listaCanais.size() + " canais para " + username);
+        
+        Response response = new Response(true, "Total de canais: " + listaCanais.size());
+        response.setChannels(listaCanais);
+        return response;
+    }
+    
+
     // Salvar dados em disco
     private static void salvarDados() {
         try {
@@ -143,9 +164,9 @@ class servidor {
             oos.writeObject(canais);
             oos.close();
             
-            System.out.println("✓ Dados persistidos em disco (usuários + canais)");
+            System.out.println("Dados persistidos em disco (usuários + canais)");
         } catch (Exception e) {
-            System.err.println("✗ Erro ao salvar: " + e.getMessage());
+            System.err.println("Erro ao salvar: " + e.getMessage());
         }
     }
     
@@ -162,7 +183,7 @@ class servidor {
                 timestampsLogin = (Map<String, Long>) ois.readObject();
                 usuariosLogados.addAll(timestampsLogin.keySet());
                 ois.close();
-                System.out.println("✓ Usuários carregados: " + usuariosLogados.size());
+                System.out.println("Usuários carregados: " + usuariosLogados.size());
             }
             
             // Carregar canais

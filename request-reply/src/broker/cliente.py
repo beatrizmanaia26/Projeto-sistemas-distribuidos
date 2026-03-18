@@ -56,7 +56,7 @@ while True:
     sleep(0.5)
 
 
-    msg= msgpack.packb({"type": "listar", "username":"loba", "timestamp": datetime.now(tz=fuso).timestamp()*1000, "channel_name": "teste"})
+    msg= msgpack.packb({"type": "list_channels", "username":"loba", "timestamp": datetime.now(tz=fuso).timestamp()*1000, "channel_name": "teste"})
     print(f"Mensagem {i}:", end=" ", flush=True)#imprimir no terminal
     socket.send(msg)#envia pro servidor
     #mensagem = socket.recv()#rcebe do servidor

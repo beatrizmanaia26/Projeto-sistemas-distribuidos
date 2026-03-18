@@ -1,4 +1,5 @@
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
 
 public class Response {
     @JsonProperty("success")
@@ -13,6 +14,10 @@ public class Response {
     @JsonProperty("channel_name")
     private String channelName;  
     
+    @JsonProperty("channels")
+    private List<String> channels;
+
+
     public Response() {
         this.timestamp = System.currentTimeMillis();
     }
@@ -33,4 +38,7 @@ public class Response {
     
     public String getChannelName() { return channelName; }
     public void setChannelName(String channelName) { this.channelName = channelName; }
+
+    public List<String> getChannels(){ return channels; }
+    public void setChannels(List<String> channels) { this.channels = channels; }
 }

@@ -54,7 +54,7 @@ def carregar_dados():
         tarefas  = dados.get("tarefas", [])
         canais   = dados.get("canais", [])
         logins   = dados.get("logins", [])
-        print(f"Dados carregados: {len(usuarios)} usuários, {len(tarefas)} tarefas", flush=True)
+        print(f"Dados carregados: {len(usuarios)} usuários, {len(canais)} canais", flush=True)
 
 # ============ SETUP ============
 context = zmq.Context()
@@ -62,7 +62,7 @@ socket = context.socket(zmq.REP)
 socket.connect("tcp://broker:5556")
 fuso = zoneinfo.ZoneInfo("America/Sao_Paulo")
 
-tarefas = []
+
 usuarios = []
 logins = []
 canais = []
@@ -110,8 +110,8 @@ while True:
                 resposta = Response(success=False, message=f"Tarefa não encontrada :(")
             print(resposta.message, flush=True)
 
-        elif fazer == "listar":
-            print(f"Lista de tarefas: {tarefas}", flush=True)
+        elif fazer == "list_channels":
+            
             resposta = Response(success=True, message=f"{canais}")
         
         elif fazer == "create_channel":
