@@ -12,10 +12,13 @@ public class Response {
     private long timestamp;  //Timestamp obrigatório
     
     @JsonProperty("channel_name")
-    private String channelName;  
+    private String channelName;
     
     @JsonProperty("channels")
     private List<String> channels;
+    //parte 2: publicação
+    @JsonProperty("publication_status")
+    private String publicationStatus;  // Status da publicação
 
 
     public Response() {
@@ -41,4 +44,7 @@ public class Response {
 
     public List<String> getChannels(){ return channels; }
     public void setChannels(List<String> channels) { this.channels = channels; }
+    
+    public String getPublicationStatus() { return publicationStatus; }
+    public void setPublicationStatus(String publicationStatus) { this.publicationStatus = publicationStatus; }
 }

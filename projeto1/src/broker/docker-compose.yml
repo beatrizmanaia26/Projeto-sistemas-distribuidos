@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.py
-    image: broker-pyzmq:latest 
+    image: broker-pyzmq:latest
     container_name: broker
     volumes:
       - ./broker.py:/app/main.py
@@ -12,13 +12,25 @@ services:
       - "5555:5555"
       - "5556:5556"
 
+  proxy:
+    image: broker-pyzmq:latest
+    container_name: proxy
+    volumes:
+      - ../proxy/proxy.py:/app/main.py
+    ports:
+      - "5557:5557"
+      - "5558:5558"
+    depends_on:
+      - broker
+
   servidorPython:
-    image: broker-pyzmq:latest #retirei o build dockerfile e imge pq todos os containers python usam a mesma img base, cria 1x no broker e reusa
+    image: broker-pyzmq:latest
     volumes:
       - ./servidor.py:/app/main.py
       - ./data_python:/app/data
     depends_on:
       - broker
+      - proxy
 
   clientePython:
     image: broker-pyzmq:latest
@@ -26,6 +38,7 @@ services:
       - ./cliente.py:/app/main.py
     depends_on:
       - broker
+      - proxy
 
   servidorJava:
     build:
@@ -37,10 +50,11 @@ services:
       - ./Message.java:/app/Message.java
       - ./Response.java:/app/Response.java
       - ./MessagePackUtil.java:/app/MessagePackUtil.java
+      - ./PublicationRecord.java:/app/PublicationRecord.java
       - ./data_java:/app/data:rw
     depends_on:
       - broker
-      #Java precisa que o nome do arquivo corresponda ao nome da classe. Com o comando explícito, cada container compila e executa a classe correta.
+      - proxy
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor"
 
   clienteJava:
@@ -52,4 +66,7 @@ services:
       - ./MessagePackUtil.java:/app/MessagePackUtil.java
     depends_on:
       - broker
-    command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' cliente"
+      - proxy
+      - servidorJava
+      - servidorPython
+    command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' cliente bot-java-1"

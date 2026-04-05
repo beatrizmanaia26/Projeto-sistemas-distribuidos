@@ -2,7 +2,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class Message {
     @JsonProperty("type")
-    private String type;  // "login", "create_channel", etc
+    private String type;  // "login", "create_channel", "publish", etc
     
     @JsonProperty("timestamp")
     private long timestamp;  // Timestamp obrigatório
@@ -11,7 +11,13 @@ public class Message {
     private String username;
     
     @JsonProperty("channel_name")
-    private String channelName; 
+    private String channelName;
+    //parte 2: publicação 
+    @JsonProperty("content")
+    private String content;  // Conteúdo da mensagem para publicação
+    
+    @JsonProperty("received_timestamp")
+    private long receivedTimestamp;  // Timestamp de recebimento (para subscriber)
     
     public Message() {
         this.timestamp = System.currentTimeMillis();
@@ -33,4 +39,10 @@ public class Message {
     
     public String getChannelName() { return channelName; }
     public void setChannelName(String channelName) { this.channelName = channelName; }
+    
+    public String getContent() { return content; }
+    public void setContent(String content) { this.content = content; }
+    
+    public long getReceivedTimestamp() { return receivedTimestamp; }
+    public void setReceivedTimestamp(long receivedTimestamp) { this.receivedTimestamp = receivedTimestamp; }
 }

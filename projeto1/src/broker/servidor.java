@@ -7,20 +7,33 @@ class servidor {
     // Dados em memória
     private static Set<String> usuariosLogados = new HashSet<>();
     private static Map<String, Long> timestampsLogin = new HashMap<>();
-    private static Set<String> canais = new HashSet<>();  
+    private static Set<String> canais = new HashSet<>();
+    private static List<PublicationRecord> publicacoes = new ArrayList<>();
     
     // Arquivos próprios do servidor (salvos em volume montado) - persistencia
     private static final String USERS_FILE = "/app/data/users_data.ser";
-    private static final String CHANNELS_FILE = "/app/data/channels_data.ser";  
+    private static final String CHANNELS_FILE = "/app/data/channels_data.ser";
+    //parte 2: publicação
+    private static final String PUBLICATIONS_FILE = "/app/data/publications_data.ser";
+    
+    // Socket para publicar no proxy
+    private static ZMQ.Socket publisherSocket;
     
     public static void main(String[] args) {
         try (ZContext context = new ZContext()) {
-            // ZeroMQ
+            // ZeroMQ REP socket para requisições
             ZMQ.Socket socket = context.createSocket(ZMQ.REP);
             socket.connect("tcp://broker:5556");
             
-            System.out.println("Servidor Java Iniciado");
+            // ZeroMQ PUB socket para publicações no proxy
+            publisherSocket = context.createSocket(ZMQ.PUB);
+            publisherSocket.connect("tcp://proxy:5557");
             
+            System.out.println("Servidor Java Iniciado");
+            System.out.println("Conectado ao broker (REQ-REP) e ao proxy (PUB-SUB)");
+            
+            // Aguardar um pouco para o proxy estar pronto
+            Thread.sleep(1000);
         
             carregarDados();
             
@@ -49,6 +62,8 @@ class servidor {
                         response = processarCriarCanal(msg);
                     } else if ("list_channels".equals(msg.getType())) {
                         response = processarListarCanais(msg);
+                    } else if ("publish".equals(msg.getType())) {
+                        response = processarPublicacao(msg);
                     } else {
                         response = new Response(false, "Tipo desconhecido: " + msg.getType());
                     }
@@ -128,7 +143,7 @@ class servidor {
         return response;
     }
     
-     private static Response processarListarCanais(Message msg) {
+    private static Response processarListarCanais(Message msg) {
         String username = msg.getUsername();
         
         if (username == null || !usuariosLogados.contains(username)) {
@@ -146,25 +161,93 @@ class servidor {
         return response;
     }
     
+    private static Response processarPublicacao(Message msg) {
+        String username = msg.getUsername();
+        String channelName = msg.getChannelName();
+        String content = msg.getContent();
+        
+        // Validações
+        if (username == null || !usuariosLogados.contains(username)) {
+            System.out.println("Tentativa de publicar sem estar logado");
+            return new Response(false, "Você precisa fazer login antes de publicar");
+        }
+        
+        if (channelName == null || channelName.trim().isEmpty()) {
+            System.out.println("Tentativa de publicar sem especificar canal");
+            return new Response(false, "Nome do canal não pode ser vazio");
+        }
+        
+        if (!canais.contains(channelName)) {
+            System.out.println("Tentativa de publicar em canal inexistente: " + channelName);
+            return new Response(false, "Canal '" + channelName + "' não existe");
+        }
+        
+        if (content == null || content.trim().isEmpty()) {
+            System.out.println("Tentativa de publicar mensagem vazia");
+            return new Response(false, "Conteúdo da mensagem não pode ser vazio");
+        }
+        
+        try {
+            // Criar mensagem para publicação
+            Message pubMsg = new Message("publication");
+            pubMsg.setUsername(username);
+            pubMsg.setChannelName(channelName);
+            pubMsg.setContent(content);
+            pubMsg.setTimestamp(msg.getTimestamp());
+            
+            // Serializar e publicar no proxy usando o canal como tópico
+            byte[] pubBytes = MessagePackUtil.serialize(pubMsg);
+            
+            // Enviar tópico (canal) + mensagem
+            publisherSocket.sendMore(channelName);
+            publisherSocket.send(pubBytes, 0);
+            
+            // Registrar publicação
+            PublicationRecord record = new PublicationRecord(username, channelName, content, msg.getTimestamp());
+            publicacoes.add(record);
+            
+            // Persistir
+            salvarDados();
+            
+            System.out.println("Publicação realizada: [" + channelName + "] " + username + ": " + content);
+            
+            Response response = new Response(true, "Mensagem publicada com sucesso no canal '" + channelName + "'");
+            response.setChannelName(channelName);
+            response.setPublicationStatus("published");
+            return response;
+            
+        } catch (Exception e) {
+            System.err.println("Erro ao publicar mensagem: " + e.getMessage());
+            return new Response(false, "Erro ao publicar mensagem: " + e.getMessage());
+        }
+    }
+    
 
     // Salvar dados em disco
     private static void salvarDados() {
         try {
             // Salvar usuários
-            ObjectOutputStream oos = new ObjectOutputStream(
+            ObjectOutputStream usersOutputStream = new ObjectOutputStream(
                 new FileOutputStream(USERS_FILE)
             );
-            oos.writeObject(timestampsLogin);
-            oos.close();
+            usersOutputStream.writeObject(timestampsLogin);
+            usersOutputStream.close();
             
             // Salvar canais
-            oos = new ObjectOutputStream(
+            ObjectOutputStream channelsOutputStream = new ObjectOutputStream(
                 new FileOutputStream(CHANNELS_FILE)
             );
-            oos.writeObject(canais);
-            oos.close();
+            channelsOutputStream.writeObject(canais);
+            channelsOutputStream.close();
             
-            System.out.println("Dados persistidos em disco (usuários + canais)");
+            // Salvar publicações
+            ObjectOutputStream publicationsOutputStream = new ObjectOutputStream(
+                new FileOutputStream(PUBLICATIONS_FILE)
+            );
+            publicationsOutputStream.writeObject(publicacoes);
+            publicationsOutputStream.close();
+            
+            System.out.println("Dados persistidos em disco (usuários + canais + publicações)");
         } catch (Exception e) {
             System.err.println("Erro ao salvar: " + e.getMessage());
         }
@@ -174,30 +257,41 @@ class servidor {
     @SuppressWarnings("unchecked")
     private static void carregarDados() {
         try {
-        
-            File file = new File(USERS_FILE);
-            if (file.exists()) {
-                ObjectInputStream ois = new ObjectInputStream(
-                    new FileInputStream(file)
+            // Carregar usuários
+            File usersFile = new File(USERS_FILE);
+            if (usersFile.exists()) {
+                ObjectInputStream usersInputStream = new ObjectInputStream(
+                    new FileInputStream(usersFile)
                 );
-                timestampsLogin = (Map<String, Long>) ois.readObject();
+                timestampsLogin = (Map<String, Long>) usersInputStream.readObject();
                 usuariosLogados.addAll(timestampsLogin.keySet());
-                ois.close();
+                usersInputStream.close();
                 System.out.println("Usuários carregados: " + usuariosLogados.size());
             }
             
             // Carregar canais
             File channelsFile = new File(CHANNELS_FILE);
             if (channelsFile.exists()) {
-                ObjectInputStream ois = new ObjectInputStream(
+                ObjectInputStream channelsInputStream = new ObjectInputStream(
                     new FileInputStream(channelsFile)
                 );
-                canais = (Set<String>) ois.readObject();
-                ois.close();
-                System.out.println(" Canais carregados: " + canais.size());
+                canais = (Set<String>) channelsInputStream.readObject();
+                channelsInputStream.close();
+                System.out.println("Canais carregados: " + canais.size());
+            }
+            
+            // Carregar publicações
+            File publicationsFile = new File(PUBLICATIONS_FILE);
+            if (publicationsFile.exists()) {
+                ObjectInputStream publicationsInputStream = new ObjectInputStream(
+                    new FileInputStream(publicationsFile)
+                );
+                publicacoes = (List<PublicationRecord>) publicationsInputStream.readObject();
+                publicationsInputStream.close();
+                System.out.println("Publicações carregadas: " + publicacoes.size());
             }
         } catch (Exception e) {
-            System.err.println(" Erro ao carregar: " + e.getMessage());
+            System.err.println("Erro ao carregar: " + e.getMessage());
         }
     }
 }
