@@ -13,6 +13,8 @@ class Message:
     username: str
     timestamp: int
     channel_name: str = ""
+    content: str = ""
+    received_timestamp: int = 0
     @staticmethod
     def unpack(data: bytes) -> "Message":
         d = msgpack.unpackb(data)
@@ -24,6 +26,8 @@ class Response:
     message: str
     timestamp: int = 0
     channel_name: str=""
+    channels: list = None
+    publication_status: str = ""
     def __post_init__(self):
         if self.timestamp == 0:
             self.timestamp = int(datetime.now().timestamp() * 1000)
@@ -39,22 +43,28 @@ def salvar_dados():
     with open(DADOS_FILE, "wb") as f:  # wb = write binary
         pickle.dump({
             "usuarios": usuarios,
-            "tarefas": tarefas,
             "canais": canais,
-            "logins": logins
+            "logins": logins,
+            "publicacoes": publicacoes
         }, f)
     print("Dados salvos.", flush=True)
 
 def carregar_dados():
-    global usuarios, tarefas, canais, logins
+    global usuarios, tarefas, canais, logins, publicacoes
     if os.path.exists(DADOS_FILE):
-        with open(DADOS_FILE, "rb") as f:  # rb = read binary
-            dados = pickle.load(f)
-        usuarios = dados.get("usuarios", [])
-        tarefas  = dados.get("tarefas", [])
-        canais   = dados.get("canais", [])
-        logins   = dados.get("logins", [])
-        print(f"Dados carregados: {len(usuarios)} usuários, {len(canais)} canais", flush=True)
+        try:
+            if os.path.getsize(DADOS_FILE) > 0: # Verifica se o arquivo está vazio
+                with open(DADOS_FILE, "rb") as f:
+                    dados = pickle.load(f)
+                usuarios = dados.get("usuarios", [])
+                canais   = dados.get("canais", set())
+                logins   = dados.get("logins", [])
+                publicacoes = dados.get("publicacoes", [])
+                print(f"Dados carregados: {len(usuarios)} usuários, {len(canais)} canais, {len(publicacoes)} publicacoes", flush=True)
+            else:
+                print("Arquivo de dados vazio. Iniciando do zero.", flush=True)
+        except (EOFError, pickle.UnpicklingError):
+            print("Erro ao ler arquivo de dados. Iniciando do zero.", flush=True)
 
 # ============ SETUP ============
 context = zmq.Context()
@@ -67,7 +77,11 @@ usuarios = []
 logins = []
 canais = []
 logado = False
+publicacoes = []
 tempo = ""
+pub_socket = context.socket(zmq.PUB)
+# Conecta na porta de ENTRADA do Proxy (geralmente o XSUB)
+pub_socket.connect("tcp://proxy:5557")
 
 carregar_dados()  # carrega ao iniciar
 
@@ -76,7 +90,7 @@ while True:
     msg = Message.unpack(socket.recv())
     fazer = msg.type
     resposta = ""
-
+    print(msg.channel_name)
     if fazer == "login":
         if msg.username in usuarios:
             tempo = msg.timestamp
@@ -88,37 +102,51 @@ while True:
             salvar_dados()  # persiste após login
             print(resposta.message, flush=True)
         else:
-            usuarios.append(msg.username)
+            usuarios.add(msg.username)
             logado = True
             resposta = Response(success=True, message="Cadastro inexistente. Adicionando...")
             salvar_dados()  # persiste novo usuário
             print(resposta.message, flush=True)
 
     elif logado == True:
-        if fazer == "criar":
-            tarefas.append(msg.username + "|" + str(tempo))
-            resposta = Response(success=True, message="Tarefa criada")
-            salvar_dados()  # persiste nova tarefa
-            print(resposta.message, flush=True)
 
-        elif fazer == "remover":
-            if msg.username in tarefas:
-                tarefas.remove(msg.username)
-                resposta = Response(success=True, message="Tarefa removida")
-                salvar_dados()  # persiste remoção
-            else:
-                resposta = Response(success=False, message=f"Tarefa não encontrada :(")
-            print(resposta.message, flush=True)
 
-        elif fazer == "list_channels":
+        if fazer == "list_channels":
             
-            resposta = Response(success=True, message=f"{canais}")
+            resposta = Response(success=True, message=f"{canais}", channels=list(canais))
+            print(list(canais))
+            salvar_dados()
         
         elif fazer == "create_channel":
-            canais.append(msg.channel_name)
-            resposta = Response(success=True, message="Canal Criado!!! Yipeeeeee")
+            if msg.channel_name in canais:
+                resposta = Response(success=False, message="Canal já existe")
+            else:
+                canais.append(msg.channel_name)
+                resposta = Response(success=True, message="Canal Criado!!! Yipeeeeee")
             salvar_dados()
+        elif fazer == "publish":
+            if msg.channel_name in canais:
+            
+                # 2. Monta a mensagem com o timestamp exigido no enunciado da Parte 2
+                agora = int(datetime.now().timestamp() * 1000)
+                conteudo_formatado = f"{msg.content} | Env: {msg.timestamp} | RecServ: {agora}"
 
+                # 3. Publica no Proxy usando PUB
+                pub_socket.send_multipart([
+                    msg.channel_name.encode('utf-8'), 
+                    conteudo_formatado.encode('utf-8')
+                ])
+                
+                publicacoes.append(f"[{msg.channel_name}] {msg.username}: {msg.content}")
+                salvar_dados()
+                
+
+                resposta = Response(success=True, message=f"Mensagem enviada ao canal {msg.channel_name}!")
+                print(f"Publicado em {msg.channel_name}: {msg.content}", flush=True)
+            else:
+                resposta = Response(success=False, message="Canal não encontrado")
+               
+            salvar_dados()
 
         else:
             resposta = Response(success=False, message="Comando inválido")
@@ -128,4 +156,5 @@ while True:
         print(resposta.message, flush=True)
 
     print(f"Mensagem recebida: {msg} às {datetime.now(tz=fuso).timestamp() * 1000}", flush=True)
+    
     socket.send(resposta.pack())
