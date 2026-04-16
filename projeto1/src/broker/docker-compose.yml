@@ -23,22 +23,39 @@ services:
     depends_on:
       - broker
 
-  servidorPython:
-    image: broker-pyzmq:latest
+  coordinator:
+    image: broker-java:latest
+    container_name: coordinator
+    ports:
+      - "5559:5559"
     volumes:
-      - ./servidor.py:/app/main.py
-      - ./data_python:/app/data
+      - ./Coordinator.java:/app/Coordinator.java
+      - ./Message.java:/app/Message.java
+      - ./Response.java:/app/Response.java
+      - ./MessagePackUtil.java:/app/MessagePackUtil.java
+      - ./ServerRecord.java:/app/ServerRecord.java
     depends_on:
       - broker
-      - proxy
+    command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' Coordinator"
 
-  clientePython:
-    image: broker-pyzmq:latest
-    volumes:
-      - ./cliente.py:/app/main.py
-    depends_on:
-      - broker
-      - proxy
+  # PYTHON - Desabilitado temporariamente (falta implementar logical_clock)
+  # Para ativar: remova os comentários (#) das linhas abaixo
+  # servidorPython:
+  #   image: broker-pyzmq:latest
+  #   volumes:
+  #     - ./servidor.py:/app/main.py
+  #     - ./data_python:/app/data
+  #   depends_on:
+  #     - broker
+  #     - proxy
+
+  # clientePython:
+  #   image: broker-pyzmq:latest
+  #   volumes:
+  #     - ./cliente.py:/app/main.py
+  #   depends_on:
+  #     - broker
+  #     - proxy
 
   servidorJava:
     build:
@@ -52,9 +69,11 @@ services:
       - ./MessagePackUtil.java:/app/MessagePackUtil.java
       - ./PublicationRecord.java:/app/PublicationRecord.java
       - ./data_java:/app/data:rw
+      - ./ServerRecord.java:/app/ServerRecord.java
     depends_on:
       - broker
       - proxy
+      - coordinator
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor"
 
   clienteJava:
@@ -64,9 +83,11 @@ services:
       - ./Message.java:/app/Message.java
       - ./Response.java:/app/Response.java
       - ./MessagePackUtil.java:/app/MessagePackUtil.java
+      - ./ServerRecord.java:/app/ServerRecord.java
     depends_on:
       - broker
       - proxy
+      - coordinator
       - servidorJava
-      - servidorPython
+     # - servidorPython
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' cliente bot-java-1"

@@ -3,6 +3,9 @@ import org.zeromq.ZContext;
 import java.util.*;
 
 class cliente {
+    // Relógio lógico do cliente
+    private static long logicalClock = 0;
+    
     private static ZMQ.Socket reqSocket;
     private static ZMQ.Socket subSocket;
     private static String username;
@@ -93,11 +96,30 @@ class cliente {
             Message loginMsg = new Message("login");
             loginMsg.setUsername(username);
             
+            //ANTES DE ENVIAR - incrementar contador
+            logicalClock++;
+            loginMsg.setLogicalClock(logicalClock);
+            System.out.println("[" + username + "][RELÓGIO] Incrementado antes de enviar: " + logicalClock);
+            
             byte[] msgBytes = MessagePackUtil.serialize(loginMsg);
             reqSocket.send(msgBytes, 0);
             
             byte[] responseBytes = reqSocket.recv(0);
             Response response = MessagePackUtil.deserialize(responseBytes, Response.class);
+            
+            // AO RECEBER - comparar e atualizar
+            long receivedClock = response.getLogicalClock();
+            long oldClock = logicalClock;
+            
+            if (receivedClock > logicalClock) {
+                logicalClock = receivedClock + 1;
+                System.out.println("[" + username + "][RELÓGIO] ATUALIZADO! Recebido=" + receivedClock +
+                                 " > local=" + oldClock + ". Novo=" + logicalClock);
+            } else {
+                logicalClock++;
+                System.out.println("[" + username + "][RELÓGIO] MANTIDO! Recebido=" + receivedClock +
+                                 " <= local=" + oldClock + ". Novo=" + logicalClock);
+            }
             
             System.out.println("[" + username + "] Login: " + response.getMessage());
             return response.isSuccess();
@@ -113,11 +135,23 @@ class cliente {
             Message listMsg = new Message("list_channels");
             listMsg.setUsername(username);
             
+            // ANTES DE ENVIAR
+            logicalClock++;
+            listMsg.setLogicalClock(logicalClock);
+            
             byte[] msgBytes = MessagePackUtil.serialize(listMsg);
             reqSocket.send(msgBytes, 0);
             
             byte[] responseBytes = reqSocket.recv(0);
             Response response = MessagePackUtil.deserialize(responseBytes, Response.class);
+            
+            // AO RECEBER
+            long receivedClock = response.getLogicalClock();
+            if (receivedClock > logicalClock) {
+                logicalClock = receivedClock + 1;
+            } else {
+                logicalClock++;
+            }
             
             if (response.isSuccess() && response.getChannels() != null) {
                 canaisDisponiveis = new ArrayList<>(response.getChannels());
@@ -134,11 +168,23 @@ class cliente {
             createMsg.setUsername(username);
             createMsg.setChannelName(nomeCanal);
             
+            // ANTES DE ENVIAR
+            logicalClock++;
+            createMsg.setLogicalClock(logicalClock);
+            
             byte[] msgBytes = MessagePackUtil.serialize(createMsg);
             reqSocket.send(msgBytes, 0);
             
             byte[] responseBytes = reqSocket.recv(0);
             Response response = MessagePackUtil.deserialize(responseBytes, Response.class);
+            
+            // AO RECEBER
+            long receivedClock = response.getLogicalClock();
+            if (receivedClock > logicalClock) {
+                logicalClock = receivedClock + 1;
+            } else {
+                logicalClock++;
+            }
             
             if (response.isSuccess()) {
                 System.out.println("[" + username + "] Canal criado: " + nomeCanal);
@@ -167,11 +213,23 @@ class cliente {
             pubMsg.setChannelName(canal);
             pubMsg.setContent(conteudo);
             
+            // ANTES DE ENVIAR
+            logicalClock++;
+            pubMsg.setLogicalClock(logicalClock);
+            
             byte[] msgBytes = MessagePackUtil.serialize(pubMsg);
             reqSocket.send(msgBytes, 0);
             
             byte[] responseBytes = reqSocket.recv(0);
             Response response = MessagePackUtil.deserialize(responseBytes, Response.class);
+            
+            // AO RECEBER
+            long receivedClock = response.getLogicalClock();
+            if (receivedClock > logicalClock) {
+                logicalClock = receivedClock + 1;
+            } else {
+                logicalClock++;
+            }
             
             if (response.isSuccess()) {
                 System.out.println("[" + username + "] PUBLICADO em [" + canal + "]: " + conteudo);

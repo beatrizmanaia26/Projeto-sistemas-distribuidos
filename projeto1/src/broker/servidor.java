@@ -4,6 +4,15 @@ import java.io.*;
 import java.util.*;
 
 class servidor {
+    // contador para sincronizar eventos
+    private static long logicalClock = 0;
+    
+    private static int serverRank = -1;
+    private static String serverName = "servidor-java-" + System.currentTimeMillis();
+    
+    // Contador de mensagens para heartbeat (a cada 10 mensagens)
+    private static int messageCount = 0;
+    
     // Dados em memória
     private static Set<String> usuariosLogados = new HashSet<>();
     private static Map<String, Long> timestampsLogin = new HashMap<>();
@@ -19,6 +28,9 @@ class servidor {
     // Socket para publicar no proxy
     private static ZMQ.Socket publisherSocket;
     
+    // PARTE 3: Socket para comunicar com coordenador
+    private static ZMQ.Socket coordinatorSocket;
+    
     public static void main(String[] args) {
         try (ZContext context = new ZContext()) {
             // ZeroMQ REP socket para requisições
@@ -29,11 +41,18 @@ class servidor {
             publisherSocket = context.createSocket(ZMQ.PUB);
             publisherSocket.connect("tcp://proxy:5557");
             
-            System.out.println("Servidor Java Iniciado");
+            // PARTE 3: Socket REQ para comunicar com coordenador
+            coordinatorSocket = context.createSocket(ZMQ.REQ);
+            coordinatorSocket.connect("tcp://coordinator:5559");
+            
+            System.out.println("Servidor Java Iniciado: " + serverName);
             System.out.println("Conectado ao broker (REQ-REP) e ao proxy (PUB-SUB)");
             
             // Aguardar um pouco para o proxy estar pronto
             Thread.sleep(1000);
+            
+            // PARTE 3: Pedir rank ao coordenador
+            requestRank();
         
             carregarDados();
             
@@ -41,16 +60,30 @@ class servidor {
                 try {
                     // Receber por ZeroMQ
                     byte[] msgBytes = socket.recv(0);
-                    
-                  
                     Message msg = MessagePackUtil.deserialize(msgBytes, Message.class);
                     
+                    // PARTE 3: AO RECEBER - comparar contador e atualizar se necessário
+                    long receivedClock = msg.getLogicalClock();
+                    long oldClock = logicalClock;
+                    
+                    if (receivedClock > logicalClock) {
+                        // Contador recebido é MAIOR - atualizar
+                        logicalClock = receivedClock + 1;
+                        System.out.println("[RELÓGIO] ATUALIZADO! Recebido=" + receivedClock +
+                                         " > local=" + oldClock + ". Novo=" + logicalClock);
+                    } else {
+                        // Contador local é MAIOR/IGUAL - manter
+                        logicalClock++;
+                        System.out.println("[RELÓGIO] MANTIDO! Recebido=" + receivedClock +
+                                         " <= local=" + oldClock + ". Novo=" + logicalClock);
+                    }
                     
                     System.out.println("\n MENSAGEM RECEBIDA UHLL");
                     System.out.println("Tipo: " + msg.getType());
                     System.out.println("Username: " + msg.getUsername());
                     System.out.println("Channel Name: " + msg.getChannelName());
                     System.out.println("Timestamp: " + msg.getTimestamp());
+                    System.out.println("Relógio Recebido: " + receivedClock);
                     System.out.println("Bytes recebidos: " + msgBytes.length);
                     
                     Response response;
@@ -68,21 +101,35 @@ class servidor {
                         response = new Response(false, "Tipo desconhecido: " + msg.getType());
                     }
                     
-                
+                    // PARTE 3: ANTES DE ENVIAR - incrementar contador
+                    logicalClock++;
+                    response.setLogicalClock(logicalClock);
+                    System.out.println("[RELÓGIO] Incrementado ANTES de enviar: " + logicalClock);
+                 
                     System.out.println("\nENVIANDO RESPOSTA !!!!");
                     System.out.println("Success: " + response.isSuccess());
                     System.out.println("Message: " + response.getMessage());
                     System.out.println("Timestamp: " + response.getTimestamp());
+                    System.out.println("Relógio Enviado: " + logicalClock);
                     
-                  
+                   
                     byte[] responseBytes = MessagePackUtil.serialize(response);
-                    
-            
                     socket.send(responseBytes, 0);
+                    
+                    // PARTE 3: Incrementar contador e enviar heartbeat a cada 10 mensagens
+                    messageCount++;
+                    if (messageCount >= 10) {
+                        System.out.println("\n[HEARTBEAT] 10 mensagens processadas, enviando heartbeat...");
+                        sendHeartbeat();
+                        messageCount = 0;
+                    }
                     
                 } catch (Exception e) {
                     System.err.println("Erro: " + e.getMessage());
                     Response errorResponse = new Response(false, "Erro no servidor");
+                    // PARTE 3: Incrementar antes de enviar erro
+                    logicalClock++;
+                    errorResponse.setLogicalClock(logicalClock);
                     byte[] errorBytes = MessagePackUtil.serialize(errorResponse);
                     socket.send(errorBytes, 0);
                 }
@@ -292,6 +339,94 @@ class servidor {
             }
         } catch (Exception e) {
             System.err.println("Erro ao carregar: " + e.getMessage());
+        }
+    }
+
+    // Pedir rank ao coordenador na inicialização (enunciado linha 14)
+    private static void requestRank() {
+        try {
+            Message rankMsg = new Message("get_rank");
+            rankMsg.setUsername(serverName);
+            
+            // ANTES DE ENVIAR incrementar relógio
+            logicalClock++;
+            rankMsg.setLogicalClock(logicalClock);
+            System.out.println("SERVIDOR RELÓGIO Incrementado antes de pedir rank: " + logicalClock);
+            
+            byte[] msgBytes = MessagePackUtil.serialize(rankMsg);
+            coordinatorSocket.send(msgBytes, 0);
+            
+            byte[] responseBytes = coordinatorSocket.recv(0);
+            Response response = MessagePackUtil.deserialize(responseBytes, Response.class);
+            
+            // AO RECEBER - atualizar relógio
+            long receivedClock = response.getLogicalClock();
+            long oldClock = logicalClock;
+            
+            if (receivedClock > logicalClock) {
+                logicalClock = receivedClock + 1;
+                System.out.println("[SERVIDOR][RELÓGIO] ATUALIZADO! Recebido=" + receivedClock + 
+                                 " > local=" + oldClock + ". Novo=" + logicalClock);
+            } else {
+                logicalClock++;
+                System.out.println("[SERVIDOR][RELÓGIO] MANTIDO! Recebido=" + receivedClock + 
+                                 " <= local=" + oldClock + ". Novo=" + logicalClock);
+            }
+            
+            if (response.isSuccess()) {
+                serverRank = response.getRank();
+                System.out.println("[SERVIDOR] Rank recebido do coordenador: " + serverRank);
+            } else {
+                System.err.println("[SERVIDOR] Erro ao pedir rank: " + response.getMessage());
+            }
+        } catch (Exception e) {
+            System.err.println("[SERVIDOR] Erro ao pedir rank: " + e.getMessage());
+        }
+    }
+    
+    // Enviar heartbeat ao coordenador (enunciado linha 27 e 33)
+    private static void sendHeartbeat() {
+        try {
+            Message heartbeatMsg = new Message("heartbeat");
+            heartbeatMsg.setUsername(serverName);
+            
+            //ANTES DE ENVIAR - incrementar relógio
+            logicalClock++;
+            heartbeatMsg.setLogicalClock(logicalClock);
+            System.out.println("[HEARTBEAT][RELÓGIO] Incrementado antes de enviar: " + logicalClock);
+            
+            byte[] msgBytes = MessagePackUtil.serialize(heartbeatMsg);
+            coordinatorSocket.send(msgBytes, 0);
+            
+            byte[] responseBytes = coordinatorSocket.recv(0);
+            Response response = MessagePackUtil.deserialize(responseBytes, Response.class);
+            
+            // AO RECEBER - atualizar relógio
+            long receivedClock = response.getLogicalClock();
+            long oldClock = logicalClock;
+            
+            if (receivedClock > logicalClock) {
+                logicalClock = receivedClock + 1;
+                System.out.println("[HEARTBEAT][RELÓGIO] ATUALIZADO! Recebido=" + receivedClock + 
+                                 " > local=" + oldClock + ". Novo=" + logicalClock);
+            } else {
+                logicalClock++;
+                System.out.println("[HEARTBEAT][RELÓGIO] MANTIDO! Recebido=" + receivedClock + 
+                                 " <= local=" + oldClock + ". Novo=" + logicalClock);
+            }
+            
+            if (response.isSuccess()) {
+                // Sincronizar relógio físico com hora do coordenador (enunciado linha 33)
+                long coordTime = response.getCurrentTime();
+                System.out.println("[HEARTBEAT] Enviado com sucesso!");
+                System.out.println("[HEARTBEAT] Hora do coordenador: " + coordTime);
+                System.out.println("[HEARTBEAT] Hora local: " + System.currentTimeMillis());
+                System.out.println("[HEARTBEAT] Diferença: " + (System.currentTimeMillis() - coordTime) + "ms\n");
+            } else {
+                System.err.println("[HEARTBEAT] Erro: " + response.getMessage());
+            }
+        } catch (Exception e) {
+            System.err.println("[HEARTBEAT] Erro ao enviar: " + e.getMessage());
         }
     }
 }

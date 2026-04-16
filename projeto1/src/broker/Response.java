@@ -11,6 +11,10 @@ public class Response {
     @JsonProperty("timestamp")
     private long timestamp;  //Timestamp obrigatório
     
+    // PARTE 3: Relógio lógico - valor do contador enviado em cada resposta
+    @JsonProperty("logical_clock")
+    private long logicalClock;
+    
     @JsonProperty("channel_name")
     private String channelName;
     
@@ -19,6 +23,18 @@ public class Response {
     //parte 2: publicação
     @JsonProperty("publication_status")
     private String publicationStatus;  // Status da publicação
+    
+    // PARTE 3: Rank do servidor - identificador único atribuído pelo coordenador
+    @JsonProperty("rank")
+    private int rank;
+    
+    // PARTE 3: Lista de servidores disponíveis - retornada pelo coordenador (enunciado linha 22)
+    @JsonProperty("server_list")
+    private List<ServerRecord> serverList;
+    
+    // PARTE 3: Hora atual do coordenador - para sincronização do relógio físico
+    @JsonProperty("current_time")
+    private long currentTime;
 
 
     public Response() {
@@ -47,4 +63,16 @@ public class Response {
     
     public String getPublicationStatus() { return publicationStatus; }
     public void setPublicationStatus(String publicationStatus) { this.publicationStatus = publicationStatus; }
+    
+    public long getLogicalClock() { return logicalClock; }
+    public void setLogicalClock(long logicalClock) { this.logicalClock = logicalClock; }
+    
+    public int getRank() { return rank; }
+    public void setRank(int rank) { this.rank = rank; }
+    
+    public List<ServerRecord> getServerList() { return serverList; }
+    public void setServerList(List<ServerRecord> serverList) { this.serverList = serverList; }
+    
+    public long getCurrentTime() { return currentTime; }
+    public void setCurrentTime(long currentTime) { this.currentTime = currentTime; }
 }

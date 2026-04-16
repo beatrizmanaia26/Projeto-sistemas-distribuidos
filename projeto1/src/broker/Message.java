@@ -7,12 +7,15 @@ public class Message {
     @JsonProperty("timestamp")
     private long timestamp;  // Timestamp obrigatório
     
+    @JsonProperty("logical_clock")
+    private long logicalClock; 
+    
     @JsonProperty("username")
     private String username;
     
     @JsonProperty("channel_name")
     private String channelName;
-    //parte 2: publicação 
+    //parte 2: publicação
     @JsonProperty("content")
     private String content;  // Conteúdo da mensagem para publicação
     
@@ -45,4 +48,7 @@ public class Message {
     
     public long getReceivedTimestamp() { return receivedTimestamp; }
     public void setReceivedTimestamp(long receivedTimestamp) { this.receivedTimestamp = receivedTimestamp; }
+    
+    public long getLogicalClock() { return logicalClock; }
+    public void setLogicalClock(long logicalClock) { this.logicalClock = logicalClock; }
 }
