@@ -15,6 +15,7 @@ class Message:
     channel_name: str = ""
     content: str = ""
     received_timestamp: int = 0
+    logical_clock: int = 0
     @staticmethod
     def unpack(data: bytes) -> "Message":
         d = msgpack.unpackb(data)
@@ -28,6 +29,9 @@ class Response:
     channel_name: str=""
     channels: list = None
     publication_status: str = ""
+    logical_clock: int = 0
+    rank: int = 0
+    current_time: int = 0
     def __post_init__(self):
         if self.timestamp == 0:
             self.timestamp = int(datetime.now().timestamp() * 1000)
@@ -65,14 +69,88 @@ def carregar_dados():
                 print("Arquivo de dados vazio. Iniciando do zero.", flush=True)
         except (EOFError, pickle.UnpicklingError):
             print("Erro ao ler arquivo de dados. Iniciando do zero.", flush=True)
+#==============COORDENADOR============================================
+def clock_before_send() -> int:
+    #Incrementa o relógio antes de enviar e retorna o novo valor.
+    global logical_clock
+    logical_clock += 1
+    print(f"[RELÓGIO] Incrementado antes de enviar: {logical_clock}", flush=True)
+    return logical_clock
+ 
+def clock_on_receive(received: int) -> None:
+    #Atualiza o relógio ao receber uma mensagem.
+    global logical_clock
+    old = logical_clock
+    if received > logical_clock:
+        logical_clock = received + 1
+        print(f"[RELÓGIO] ATUALIZADO! Recebido={received} > local={old}. Novo={logical_clock}", flush=True)
+    else:
+        logical_clock += 1
+        print(f"[RELÓGIO] MANTIDO! Recebido={received} <= local={old}. Novo={logical_clock}", flush=True)
 
+def _coord_send_recv(msg_dict: dict) -> dict:
+    """Envia uma mensagem ao coordenador e retorna a resposta desserializada."""
+    data = msgpack.packb(msg_dict)
+    coord_socket.send(data)
+    raw = coord_socket.recv()
+    return msgpack.unpackb(raw, raw=False)
+
+def request_rank():
+    #Pede o rank ao coordenador na inicialização (enunciado linha 14).
+    global logical_clock
+    global server_rank
+    global server_name
+    lc = clock_before_send()
+    msg = {
+        "type": "get_rank",
+        "username": server_name,
+        "timestamp": int(datetime.now().timestamp() * 1000),
+        "logical_clock": lc,
+    }
+    print(f"[COORDENADOR] Pedindo rank como '{server_name}'...", flush=True)
+    resp = _coord_send_recv(msg)
+    clock_on_receive(resp.get("logical_clock", 0))
+ 
+    if resp.get("success"):
+        server_rank = resp.get("rank", -1)
+        print(f"[COORDENADOR] Rank recebido: {server_rank}", flush=True)
+    else:
+        print(f"[COORDENADOR] Erro ao pedir rank: {resp.get('message')}", flush=True)
+ 
+ 
+def send_heartbeat():
+    #Envia heartbeat ao coordenador e sincroniza o relógio físico.
+    global server_name
+    lc = clock_before_send()
+    msg = {
+        "type": "heartbeat",
+        "username": server_name,
+        "timestamp": int(datetime.now().timestamp() * 1000),
+        "logical_clock": lc,
+    }
+    print(f"\n[HEARTBEAT] Enviando heartbeat...", flush=True)
+    resp = _coord_send_recv(msg)
+    clock_on_receive(resp.get("logical_clock", 0))
+ 
+    if resp.get("success"):
+        coord_time = resp.get("current_time", 0)
+        local_time = int(datetime.now().timestamp() * 1000)
+        print(f"[HEARTBEAT] OK! Hora do coordenador: {coord_time}", flush=True)
+        print(f"[HEARTBEAT] Hora local:               {local_time}", flush=True)
+        print(f"[HEARTBEAT] Diferença:                {local_time - coord_time} ms\n", flush=True)
+    else:
+        print(f"[HEARTBEAT] Erro: {resp.get('message')}", flush=True)
 # ============ SETUP ============
 context = zmq.Context()
 socket = context.socket(zmq.REP)
 socket.connect("tcp://broker:5556")
+coord_socket = context.socket(zmq.REQ)
+coord_socket.connect("tcp://coordinatorPython:5560")
 fuso = zoneinfo.ZoneInfo("America/Sao_Paulo")
-
-
+logical_clock = 0
+server_rank = 0
+server_name = "servidor-python"
+contadorMensagens = 0
 usuarios = []
 logins = []
 canais = []
@@ -84,13 +162,17 @@ pub_socket = context.socket(zmq.PUB)
 pub_socket.connect("tcp://proxy:5557")
 
 carregar_dados()  # carrega ao iniciar
-
+request_rank() #pedindo rank para o coordenador
 # ============ LOOP PRINCIPAL ============
 while True:
     msg = Message.unpack(socket.recv())
+    contadorMensagens+=1
     fazer = msg.type
     resposta = ""
     print(msg.channel_name)
+    if contadorMensagens == 10:
+        send_heartbeat()
+        contadorMensagens = 0
     if fazer == "login":
         if msg.username in usuarios:
             tempo = msg.timestamp

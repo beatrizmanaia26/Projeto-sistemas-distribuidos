@@ -37,25 +37,37 @@ services:
     depends_on:
       - broker
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' Coordinator"
-
+  coordinatorPython:
+    image: broker-pyzmq:latest
+    container_name: coordinatorPython
+    volumes:
+      - ./Coordinator.py:/app/Coordinator.py
+    ports:
+      - "5560:5560"
+    depends_on:
+      - broker
+    command: python /app/Coordinator.py
   # PYTHON - Desabilitado temporariamente (falta implementar logical_clock)
   # Para ativar: remova os comentários (#) das linhas abaixo
-  # servidorPython:
-  #   image: broker-pyzmq:latest
-  #   volumes:
-  #     - ./servidor.py:/app/main.py
-  #     - ./data_python:/app/data
-  #   depends_on:
-  #     - broker
-  #     - proxy
+  servidorPython:
+     image: broker-pyzmq:latest
+     volumes:
+       - ./servidor.py:/app/main.py
+       - ./data_python:/app/data
+     depends_on:
+       - broker
+       - proxy
+       - coordinatorPython
 
-  # clientePython:
-  #   image: broker-pyzmq:latest
-  #   volumes:
-  #     - ./cliente.py:/app/main.py
-  #   depends_on:
-  #     - broker
-  #     - proxy
+  clientePython:
+     image: broker-pyzmq:latest
+     volumes:
+       - ./cliente.py:/app/main.py
+     depends_on:
+       - broker
+       - proxy
+       - servidorJava
+       - servidorPython
 
   servidorJava:
     build:
@@ -89,5 +101,5 @@ services:
       - proxy
       - coordinator
       - servidorJava
-     # - servidorPython
+      - servidorPython
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' cliente bot-java-1"
