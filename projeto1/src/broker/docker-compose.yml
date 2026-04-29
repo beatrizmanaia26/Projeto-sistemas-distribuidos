@@ -58,19 +58,19 @@ services:
   #     - broker
   #     - proxy
 
-  servidorJava1:
+  servidorJava:
     build:
       context: .
       dockerfile: Dockerfile.java
     image: broker-java:latest
-    container_name: servidorJava1
+    container_name: servidorJava
     volumes:
       - ./servidor.java:/app/servidor.java
       - ./Message.java:/app/Message.java
       - ./Response.java:/app/Response.java
       - ./MessagePackUtil.java:/app/MessagePackUtil.java
       - ./PublicationRecord.java:/app/PublicationRecord.java
-      - ./data_java1:/app/data:rw
+      - ./data_java:/app/data:rw
       - ./ServerRecord.java:/app/ServerRecord.java
     ports:
       - "6001:6001"
@@ -78,48 +78,48 @@ services:
       - broker
       - proxy
       - coordinator
-    command: sh -c "rm -f /app/*.class && javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor 6001"
+    command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor 6001"
 
-  servidorJava2:
-    image: broker-java:latest
-    container_name: servidorJava2
-    volumes:
-      - ./servidor.java:/app/servidor.java
-      - ./Message.java:/app/Message.java
-      - ./Response.java:/app/Response.java
-      - ./MessagePackUtil.java:/app/MessagePackUtil.java
-      - ./PublicationRecord.java:/app/PublicationRecord.java
-      - ./data_java2:/app/data:rw
-      - ./ServerRecord.java:/app/ServerRecord.java
-    ports:
-      - "6002:6002"
-    depends_on:
-      - broker
-      - proxy
-      - coordinator
-      - servidorJava1
-    command: sh -c "rm -f /app/*.class && javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor 6002"
+  # SERVIDORES JAVA EXTRAS - Descomente para testar com múltiplos servidores
+  # servidorJava2:
+  #   image: broker-java:latest
+  #   container_name: servidorJava2
+  #   volumes:
+  #     - ./servidor.java:/app/servidor.java
+  #     - ./Message.java:/app/Message.java
+  #     - ./Response.java:/app/Response.java
+  #     - ./MessagePackUtil.java:/app/MessagePackUtil.java
+  #     - ./PublicationRecord.java:/app/PublicationRecord.java
+  #     - ./data_java2:/app/data:rw
+  #     - ./ServerRecord.java:/app/ServerRecord.java
+  #   ports:
+  #     - "6002:6002"
+  #   depends_on:
+  #     - broker
+  #     - proxy
+  #     - coordinator
+  #     - servidorJava
+  #   command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor 6002"
 
-  servidorJava3:
-    image: broker-java:latest
-    container_name: servidorJava3
-    volumes:
-      - ./servidor.java:/app/servidor.java
-      - ./Message.java:/app/Message.java
-      - ./Response.java:/app/Response.java
-      - ./MessagePackUtil.java:/app/MessagePackUtil.java
-      - ./PublicationRecord.java:/app/PublicationRecord.java
-      - ./data_java3:/app/data:rw
-      - ./ServerRecord.java:/app/ServerRecord.java
-    ports:
-      - "6003:6003"
-    depends_on:
-      - broker
-      - proxy
-      - coordinator
-      - servidorJava1
-      - servidorJava2
-    command: sh -c "rm -f /app/*.class && javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor 6003"
+  # servidorJava3:
+  #   image: broker-java:latest
+  #   container_name: servidorJava3
+  #   volumes:
+  #     - ./servidor.java:/app/servidor.java
+  #     - ./Message.java:/app/Message.java
+  #     - ./Response.java:/app/Response.java
+  #     - ./MessagePackUtil.java:/app/MessagePackUtil.java
+  #     - ./PublicationRecord.java:/app/PublicationRecord.java
+  #     - ./data_java3:/app/data:rw
+  #     - ./ServerRecord.java:/app/ServerRecord.java
+  #   ports:
+  #     - "6003:6003"
+  #   depends_on:
+  #     - broker
+  #     - proxy
+  #     - coordinator
+  #     - servidorJava
+  #   command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor 6003"
 
   clienteJava:
     image: broker-java:latest
@@ -134,8 +134,5 @@ services:
       - broker
       - proxy
       - coordinator
-      - servidorJava1
-      - servidorJava2
-      - servidorJava3
-     # - servidorPython
+      - servidorJava
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' cliente bot-java-1"

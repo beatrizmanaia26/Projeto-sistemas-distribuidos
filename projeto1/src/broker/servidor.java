@@ -726,11 +726,9 @@ public class servidor {
                 // Alguém com rank maior respondeu, aguardar anúncio de coordenador
                 System.out.println("[ELEIÇÃO] Servidor(es) com rank maior responderam, aguardando anúncio...");
                 
-                // Aguardar em intervalos MUITO curtos verificando se coordenador foi definido
-                // O anúncio será processado pelo Poller principal e definirá currentCoordinator
-                for (int i = 0; i < 50; i++) { // 50 x 100ms = 5 segundos
+               for (int i = 0; i < 50; i++) { 
                     try {
-                        Thread.sleep(100); // Aguardar apenas 100ms por vez
+                        Thread.sleep(100); 
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -877,8 +875,6 @@ public class servidor {
             return;
         }
         
-        // CRÍTICO: Apenas o servidor com MAIOR rank deve se tornar coordenador
-        // Verificar se há algum servidor com rank maior que ainda está ativo
         try {
             for (ServerRecord server : knownServers) {
                 if (server.getRank() > serverRank) {
@@ -920,7 +916,6 @@ public class servidor {
     private static void announceCoordinator() {
         try {
             // Aguardar um pouco para garantir que todos os subscribers estão prontos
-            // Isso resolve o problema de "slow joiner" do ZeroMQ PUB/SUB
             Thread.sleep(500);
             
             Message coordMsg = new Message("coordinator");
@@ -1093,8 +1088,6 @@ public class servidor {
         if (isCoordinator) {
             System.out.println("[BERKELEY] Resposta de sincronização recebida de " + sender);
             System.out.println("[BERKELEY] Relógio do servidor: " + msg.getTimestamp());
-            // Em uma implementação completa, coletaríamos todas as respostas,
-            // calcularíamos a média e enviaríamos os ajustes
         }
     }
     
@@ -1108,7 +1101,7 @@ public class servidor {
         System.out.println("[BERKELEY] Atualização de relógio recebida");
         System.out.println("[BERKELEY] Offset a aplicar: " + offset + "ms");
         
-        // Em uma implementação real, ajustaríamos o relógio do so
+      
         System.out.println("[BERKELEY] Relógio ajustado (simulado)");
     }
 }
