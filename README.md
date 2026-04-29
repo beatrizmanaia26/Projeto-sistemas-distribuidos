@@ -35,3 +35,14 @@ Dockerfile (ou Containerfile) para a criação das imagens que serão necessári
 
 docker-compose.yaml para execução de todos os containers do projeto considerando a execução de 2 clientes e 2 servidores para cada integrante do grupo
 código fonte do(s) cliente(s), servidore(s) e broker implementados nas linguagens escolhidas
+
+
+### servidor
+
+-subir
+
+docker-compose up
+
+-derrubar
+
+docker stop nome
