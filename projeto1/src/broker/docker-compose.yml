@@ -37,59 +37,93 @@ services:
     depends_on:
       - broker
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' Coordinator"
-  coordinatorPython:
-    image: broker-pyzmq:latest
-    container_name: coordinatorPython
-    volumes:
-      - ./Coordinator.py:/app/Coordinator.py
-    ports:
-      - "5560:5560"
-    depends_on:
-      - broker
-    command: python /app/Coordinator.py
-  # PYTHON - Desabilitado temporariamente (falta implementar logical_clock)
+
+  # PYTHON - Desabilitado (falta implementar eleição)
   # Para ativar: remova os comentários (#) das linhas abaixo
-  servidorPython:
-     image: broker-pyzmq:latest
-     volumes:
-       - ./servidor.py:/app/main.py
-       - ./data_python:/app/data
-     depends_on:
-       - broker
-       - proxy
-       - coordinatorPython
+  # servidorPython:
+  #   image: broker-pyzmq:latest
+  #   volumes:
+  #     - ./servidor.py:/app/main.py
+  #     - ./data_python:/app/data
+  #   depends_on:
+  #     - broker
+  #     - proxy
+  #     - coordinator
 
-  clientePython:
-     image: broker-pyzmq:latest
-     volumes:
-       - ./cliente.py:/app/main.py
-     depends_on:
-       - broker
-       - proxy
-       - servidorJava
-       - servidorPython
+  # clientePython:
+  #   image: broker-pyzmq:latest
+  #   volumes:
+  #     - ./cliente.py:/app/main.py
+  #   depends_on:
+  #     - broker
+  #     - proxy
 
-  servidorJava:
+  servidorJava1:
     build:
       context: .
       dockerfile: Dockerfile.java
     image: broker-java:latest
+    container_name: servidorJava1
     volumes:
       - ./servidor.java:/app/servidor.java
       - ./Message.java:/app/Message.java
       - ./Response.java:/app/Response.java
       - ./MessagePackUtil.java:/app/MessagePackUtil.java
       - ./PublicationRecord.java:/app/PublicationRecord.java
-      - ./data_java:/app/data:rw
+      - ./data_java1:/app/data:rw
       - ./ServerRecord.java:/app/ServerRecord.java
+    ports:
+      - "6001:6001"
     depends_on:
       - broker
       - proxy
       - coordinator
-    command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor"
+    command: sh -c "rm -f /app/*.class && javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor 6001"
+
+  servidorJava2:
+    image: broker-java:latest
+    container_name: servidorJava2
+    volumes:
+      - ./servidor.java:/app/servidor.java
+      - ./Message.java:/app/Message.java
+      - ./Response.java:/app/Response.java
+      - ./MessagePackUtil.java:/app/MessagePackUtil.java
+      - ./PublicationRecord.java:/app/PublicationRecord.java
+      - ./data_java2:/app/data:rw
+      - ./ServerRecord.java:/app/ServerRecord.java
+    ports:
+      - "6002:6002"
+    depends_on:
+      - broker
+      - proxy
+      - coordinator
+      - servidorJava1
+    command: sh -c "rm -f /app/*.class && javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor 6002"
+
+  servidorJava3:
+    image: broker-java:latest
+    container_name: servidorJava3
+    volumes:
+      - ./servidor.java:/app/servidor.java
+      - ./Message.java:/app/Message.java
+      - ./Response.java:/app/Response.java
+      - ./MessagePackUtil.java:/app/MessagePackUtil.java
+      - ./PublicationRecord.java:/app/PublicationRecord.java
+      - ./data_java3:/app/data:rw
+      - ./ServerRecord.java:/app/ServerRecord.java
+    ports:
+      - "6003:6003"
+    depends_on:
+      - broker
+      - proxy
+      - coordinator
+      - servidorJava1
+      - servidorJava2
+    command: sh -c "rm -f /app/*.class && javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' servidor 6003"
 
   clienteJava:
     image: broker-java:latest
+    container_name: clienteJava
     volumes:
       - ./cliente.java:/app/cliente.java
       - ./Message.java:/app/Message.java
@@ -100,6 +134,8 @@ services:
       - broker
       - proxy
       - coordinator
-      - servidorJava
-      - servidorPython
+      - servidorJava1
+      - servidorJava2
+      - servidorJava3
+     # - servidorPython
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' cliente bot-java-1"

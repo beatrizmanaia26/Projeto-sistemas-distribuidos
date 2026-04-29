@@ -35,6 +35,13 @@ public class Response {
     // PARTE 3: Hora atual do coordenador - para sincronização do relógio físico
     @JsonProperty("current_time")
     private long currentTime;
+    
+    // PARTE 4: Campos para eleição e sincronização Berkeley
+    @JsonProperty("coordinator_name")
+    private String coordinatorName;  // Nome do coordenador eleito
+    
+    @JsonProperty("clock_offset")
+    private long clockOffset;  // Diferença de relógio para sincronização Berkeley
 
 
     public Response() {
@@ -75,4 +82,11 @@ public class Response {
     
     public long getCurrentTime() { return currentTime; }
     public void setCurrentTime(long currentTime) { this.currentTime = currentTime; }
+    
+    // PARTE 4: Getters e Setters para eleição e sincronização
+    public String getCoordinatorName() { return coordinatorName; }
+    public void setCoordinatorName(String coordinatorName) { this.coordinatorName = coordinatorName; }
+    
+    public long getClockOffset() { return clockOffset; }
+    public void setClockOffset(long clockOffset) { this.clockOffset = clockOffset; }
 }

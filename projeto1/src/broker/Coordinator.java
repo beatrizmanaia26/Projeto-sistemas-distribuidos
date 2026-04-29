@@ -130,7 +130,7 @@ class Coordinator {
         return response;
     }
     
-    // PARTE 3: Processar heartbeat (enunciado linha 27 e 33)
+    // PARTE 4: Processar heartbeat (sem retornar hora - eleição cuida da sincronização)
     private static Response processHeartbeat(Message msg) {
         String serverName = msg.getUsername();
         
@@ -138,15 +138,14 @@ class Coordinator {
             return new Response(false, "Servidor não cadastrado");
         }
         
-        // PARTE 3: Atualizar timestamp do último heartbeat (enunciado linha 27)
+        // Atualizar timestamp do último heartbeat
         ServerRecord server = servers.get(serverName);
         server.setLastHeartbeat(System.currentTimeMillis());
         
         System.out.println("[COORDENADOR] Heartbeat de: " + serverName + " (rank=" + server.getRank() + ")");
         
-        // Retornar hora atual para sincronização 
+        // PARTE 4: Não retorna mais currentTime - sincronização é feita via eleição
         Response response = new Response(true, "Heartbeat OK");
-        response.setCurrentTime(System.currentTimeMillis());
         return response;
     }
     

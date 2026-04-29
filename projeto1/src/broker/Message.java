@@ -8,7 +8,7 @@ public class Message {
     private long timestamp;  // Timestamp obrigatório
     
     @JsonProperty("logical_clock")
-    private long logicalClock; 
+    private long logicalClock;
     
     @JsonProperty("username")
     private String username;
@@ -21,6 +21,16 @@ public class Message {
     
     @JsonProperty("received_timestamp")
     private long receivedTimestamp;  // Timestamp de recebimento (para subscriber)
+    
+    // PARTE 4: Campos para eleição e sincronização
+    @JsonProperty("election_id")
+    private int electionId;  // ID da eleição (rank do servidor que iniciou)
+    
+    @JsonProperty("coordinator_name")
+    private String coordinatorName;  // Nome do coordenador eleito
+    
+    @JsonProperty("clock_offset")
+    private long clockOffset;  // Diferença de relógio para sincronização Berkeley
     
     public Message() {
         this.timestamp = System.currentTimeMillis();
@@ -51,4 +61,14 @@ public class Message {
     
     public long getLogicalClock() { return logicalClock; }
     public void setLogicalClock(long logicalClock) { this.logicalClock = logicalClock; }
+    
+    // PARTE 4: Getters e Setters para eleição e sincronização
+    public int getElectionId() { return electionId; }
+    public void setElectionId(int electionId) { this.electionId = electionId; }
+    
+    public String getCoordinatorName() { return coordinatorName; }
+    public void setCoordinatorName(String coordinatorName) { this.coordinatorName = coordinatorName; }
+    
+    public long getClockOffset() { return clockOffset; }
+    public void setClockOffset(long clockOffset) { this.clockOffset = clockOffset; }
 }
