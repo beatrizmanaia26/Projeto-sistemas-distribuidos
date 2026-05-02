@@ -39,25 +39,52 @@ services:
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' Coordinator"
 
   # PYTHON - Desabilitado (falta implementar eleição)
-  # Para ativar: remova os comentários (#) das linhas abaixo
-  # servidorPython:
-  #   image: broker-pyzmq:latest
-  #   volumes:
-  #     - ./servidor.py:/app/main.py
-  #     - ./data_python:/app/data
-  #   depends_on:
-  #     - broker
-  #     - proxy
-  #     - coordinator
+  servidorPython1:
+    image: broker-pyzmq:latest
+    container_name: servidorPython1
+    environment:
+      - SERVER_NAME=servidorPython1
+    volumes:
+      - ./servidor.py:/app/main.py
+      - ./data_python1:/app/data
+    ports:
+      - "6003:6003"
 
-  # clientePython:
-  #   image: broker-pyzmq:latest
-  #   volumes:
-  #     - ./cliente.py:/app/main.py
-  #   depends_on:
-  #     - broker
-  #     - proxy
-
+    depends_on:
+      - broker
+      - proxy
+      - coordinator
+    command: sh -c "sleep 5 && python /app/main.py 6003"
+ 
+  servidorPython2:
+    image: broker-pyzmq:latest
+    container_name: servidorPython2
+    environment:
+      - SERVER_NAME=servidorPython2
+    volumes:
+      - ./servidor.py:/app/main.py
+      - ./data_python2:/app/data
+    ports:
+      - "6004:6004"
+    depends_on:
+      - broker
+      - proxy
+      - coordinator
+      - servidorPython1
+    command: sh -c "sleep 5 && python /app/main.py 6004"
+  clientePython:
+    image: broker-pyzmq:latest
+    container_name: clientePython
+    volumes:
+      - ./cliente.py:/app/main.py
+    depends_on:
+      - broker
+      - proxy
+      - servidorPython1
+      - servidorPython2
+      - servidorJava1
+      - servidorJava2
+    command: sh -c "sleep 6 && python /app/main.py"
   servidorJava1:
     build:
       context: .
@@ -157,6 +184,7 @@ services:
       - coordinator
       - servidorJava1
       - servidorJava2
-      - servidorJava3
-     # - servidorPython
+     #- servidorJava3
+      - servidorPython1
+      - servidorPython2
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' cliente bot-java-1"

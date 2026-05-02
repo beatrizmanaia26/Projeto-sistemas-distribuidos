@@ -682,8 +682,32 @@ public class servidor {
                     ZMQ.Socket reqSocket = electionContext.createSocket(ZMQ.REQ);
                     
                     // Conectar ao servidor usando o hostname do docker-compose
-                    String serverHost = "servidorJava" + server.getRank(); // servidorJava1, servidorJava2, servidorJava3
-                    int serverPort = 6000 + server.getRank(); // 6001, 6002, 6003
+                    String serverHost;
+                    int serverPort;
+
+                    switch (server.getRank()) {
+                        case 1:
+                            serverHost = "servidorPython1";
+                            serverPort = 6003;
+                            break;
+                        case 2:
+                            serverHost = "servidorPython2";
+                            serverPort = 6004;
+                            break;
+                        case 3:
+                            serverHost = "servidorJava1";
+                            serverPort = 6001;
+                            break;
+                        case 4:
+                            serverHost = "servidorJava2";
+                            serverPort = 6002;
+                            break;
+                        default:
+                            // Fallback caso um novo servidor seja adicionado no futuro
+                            serverHost = "servidorJava" + server.getRank();
+                            serverPort = 6000 + server.getRank();
+                    }
+
                     String address = "tcp://" + serverHost + ":" + serverPort;
                     
                     System.out.println("[ELEIÇÃO] Conectando a: " + address);

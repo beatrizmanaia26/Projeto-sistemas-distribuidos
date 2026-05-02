@@ -6,22 +6,28 @@ import time
 
 # ============ RELÓGIO LÓGICO ============
 logical_clock = 0
+clock_lock = threading.Lock()
+
 
 def clock_before_send() -> int:
     global logical_clock
-    logical_clock += 1
-    print(f"[COORDENADOR][RELÓGIO] Incrementado antes de enviar: {logical_clock}", flush=True)
-    return logical_clock
+    with clock_lock:
+        logical_clock += 1
+        val = logical_clock
+    print(f"[COORDENADOR][RELÓGIO] Incrementado antes de enviar: {val}", flush=True)
+    return val
+
 
 def clock_on_receive(received: int) -> None:
     global logical_clock
-    old = logical_clock
-    if received > logical_clock:
-        logical_clock = received + 1
-        print(f"[COORDENADOR][RELÓGIO] ATUALIZADO! Recebido={received} > local={old}. Novo={logical_clock}", flush=True)
-    else:
-        logical_clock += 1
-        print(f"[COORDENADOR][RELÓGIO] MANTIDO! Recebido={received} <= local={old}. Novo={logical_clock}", flush=True)
+    with clock_lock:
+        old = logical_clock
+        if received > logical_clock:
+            logical_clock = received + 1
+            print(f"[COORDENADOR][RELÓGIO] ATUALIZADO! Recebido={received} > local={old}. Novo={logical_clock}", flush=True)
+        else:
+            logical_clock += 1
+            print(f"[COORDENADOR][RELÓGIO] MANTIDO! Recebido={received} <= local={old}. Novo={logical_clock}", flush=True)
 
 
 # ============ ESTADO DOS SERVIDORES ============
@@ -38,7 +44,11 @@ def process_get_rank(msg: dict) -> dict:
     global next_rank
     server_name = msg.get("username", "").strip()
     if not server_name:
-        return {"success": False, "message": "Nome do servidor inválido", "logical_clock": 0, "rank": 0, "current_time": 0}
+        return {
+            "success": False, "message": "Nome do servidor inválido",
+            "logical_clock": 0, "rank": 0, "current_time": 0,
+            "server_list": None, "coordinator_name": "", "clock_offset": 0,
+        }
 
     with servers_lock:
         if server_name in servers:
@@ -53,7 +63,11 @@ def process_get_rank(msg: dict) -> dict:
             }
             print(f"[COORDENADOR] NOVO servidor cadastrado: {server_name} (rank={rank})", flush=True)
 
-    return {"success": True, "message": "Rank atribuído", "rank": rank, "logical_clock": 0, "current_time": 0}
+    return {
+        "success": True, "message": "Rank atribuído", "rank": rank,
+        "logical_clock": 0, "current_time": 0,
+        "server_list": None, "coordinator_name": "", "clock_offset": 0,
+    }
 
 
 def process_get_server_list(msg: dict) -> dict:
@@ -65,19 +79,39 @@ def process_get_server_list(msg: dict) -> dict:
     print(f"[COORDENADOR] Retornando lista com {len(server_list)} servidores", flush=True)
     for s in server_list:
         print(f"  - {s['name']} (rank={s['rank']})", flush=True)
-    return {"success": True, "message": "Lista de servidores", "server_list": server_list, "logical_clock": 0, "current_time": 0, "rank": 0}
+    return {
+        "success": True, "message": "Lista de servidores",
+        "server_list": server_list, "logical_clock": 0,
+        "current_time": 0, "rank": 0,
+        "coordinator_name": "", "clock_offset": 0,
+    }
 
 
 def process_heartbeat(msg: dict) -> dict:
+    """
+    PARTE 4: Heartbeat NÃO retorna mais current_time.
+    A sincronização do relógio é responsabilidade do coordenador eleito entre os servidores.
+    """
     server_name = msg.get("username", "").strip()
     with servers_lock:
         if server_name not in servers:
-            return {"success": False, "message": "Servidor não cadastrado", "logical_clock": 0, "rank": 0, "current_time": 0}
+            return {
+                "success": False, "message": "Servidor não cadastrado",
+                "logical_clock": 0, "rank": 0, "current_time": 0,
+                "server_list": None, "coordinator_name": "", "clock_offset": 0,
+            }
         servers[server_name]["last_heartbeat"] = time.time()
+        rank = servers[server_name]["rank"]
 
-    current_time = int(datetime.now().timestamp() * 1000)
-    print(f"[COORDENADOR] Heartbeat de: {server_name} (rank={servers[server_name]['rank']})", flush=True)
-    return {"success": True, "message": "Heartbeat OK", "current_time": current_time, "logical_clock": 0, "rank": 0}
+    print(f"[COORDENADOR] Heartbeat de: {server_name} (rank={rank})", flush=True)
+
+    # PARTE 4: current_time = 0 — hora não é mais fornecida aqui
+    return {
+        "success": True, "message": "Heartbeat OK",
+        "current_time": 0,          # <-- removido conforme enunciado Parte 4
+        "logical_clock": 0, "rank": 0,
+        "server_list": None, "coordinator_name": "", "clock_offset": 0,
+    }
 
 
 # ============ THREAD DE LIMPEZA ============
@@ -104,6 +138,7 @@ socket.bind("tcp://*:5560")
 print("COORDENADOR PYTHON INICIADO", flush=True)
 print("Porta: 5560", flush=True)
 print("Aguardando servidores...\n", flush=True)
+print("PARTE 4: heartbeat NÃO retorna current_time — sincronização via eleição.", flush=True)
 
 t = threading.Thread(target=cleanup_loop, daemon=True)
 t.start()
@@ -124,12 +159,20 @@ while True:
         elif msg_type == "heartbeat":
             response = process_heartbeat(msg)
         else:
-            response = {"success": False, "message": "Tipo desconhecido", "logical_clock": 0, "rank": 0, "current_time": 0}
+            response = {
+                "success": False, "message": "Tipo desconhecido",
+                "logical_clock": 0, "rank": 0, "current_time": 0,
+                "server_list": None, "coordinator_name": "", "clock_offset": 0,
+            }
 
         response["logical_clock"] = clock_before_send()
         socket.send(msgpack.packb(response))
 
     except Exception as e:
         print(f"[COORDENADOR] Erro: {e}", flush=True)
-        err = {"success": False, "message": "Erro no coordenador", "logical_clock": clock_before_send(), "rank": 0, "current_time": 0}
+        err = {
+            "success": False, "message": "Erro no coordenador",
+            "logical_clock": clock_before_send(), "rank": 0, "current_time": 0,
+            "server_list": None, "coordinator_name": "", "clock_offset": 0,
+        }
         socket.send(msgpack.packb(err))

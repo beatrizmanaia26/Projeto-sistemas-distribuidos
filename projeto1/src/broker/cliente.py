@@ -12,11 +12,15 @@ global logical_clock
 class Message:
     type: str
     username: str
-    timestamp: int = 0
+    timestamp: int
     channel_name: str = ""
-    received_timestamp: int = 0
     content: str = ""
-    logical_clock: int = 0 
+    received_timestamp: int = 0
+    logical_clock: int = 0
+    election_id: int = 0
+    coordinator_name: str = ""
+    clock_offset: int = 0
+
     def __post_init__(self):
         if self.timestamp == 0:
             self.timestamp = int(datetime.now().timestamp() * 1000)
@@ -28,14 +32,16 @@ class Message:
 class Response:
     success: bool
     message: str
-    timestamp: int
+    timestamp: int = 0
     channel_name: str = ""
     channels: list = None
     publication_status: str = ""
-    logical_clock: int = 0 
+    logical_clock: int = 0
     rank: int = 0
     current_time: int = 0
     server_list: list = None
+    coordinator_name: str = ""
+    clock_offset: int = 0
     @staticmethod
     def unpack(data: bytes) -> "Response":
         d = msgpack.unpackb(data)
@@ -79,16 +85,27 @@ def ouvir_proxy(username):
 # Vamos iniciar a thread depois de definir o username
 
 def enviar_req(msg: Message) -> Response:
-    global canais_disponiveis
-    global logical_clock
-    logical_clock +=1
+    global logical_clock, canais_disponiveis
+    logical_clock += 1
+    msg.logical_clock = logical_clock
+    print(f"[CLIENTE] Enviando: type={msg.type} user={msg.username} relógio={logical_clock}", flush=True)
     req_socket.send(msg.pack())
     resposta = Response.unpack(req_socket.recv())
-    
-    # Atualiza a lista de canais, protegendo contra o None
+
+    # atualizar relógio ao receber
+    received = resposta.logical_clock
+    if received > logical_clock:
+        logical_clock = received + 1
+        print(f"[RELÓGIO] ATUALIZADO! Recebido={received}. Novo={logical_clock}", flush=True)
+    else:
+        logical_clock += 1
+        print(f"[RELÓGIO] MANTIDO! Recebido={received}. Novo={logical_clock}", flush=True)
+
+    print(f"[CLIENTE] Resposta: success={resposta.success} msg='{resposta.message}'", flush=True)
+
     if resposta.channels is not None:
         canais_disponiveis = resposta.channels
-    elif not canais_disponiveis: 
+    elif not canais_disponiveis:
         canais_disponiveis = []
     sleep(1)
     return resposta
@@ -110,7 +127,7 @@ def iniciar_bot(bot_id):
     
     # 1. Login
    
-    enviar_req(Message(type="login", username=username, timestamp= datetime.now(tz=fuso).timestamp()*1000))
+    enviar_req(Message(type="login", username=username, timestamp= datetime.now(tz=fuso).timestamp()*1000, logical_clock = logical_clock))
     
     # Inicia a thread de escuta agora que temos o nome
     thread_escuta = threading.Thread(target=ouvir_proxy, args=(username,), daemon=True)
