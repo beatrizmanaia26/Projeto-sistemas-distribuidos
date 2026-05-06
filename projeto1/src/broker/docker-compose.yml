@@ -34,6 +34,7 @@ services:
       - ./Response.java:/app/Response.java
       - ./MessagePackUtil.java:/app/MessagePackUtil.java
       - ./ServerRecord.java:/app/ServerRecord.java
+      - ./PublicationRecord.java:/app/PublicationRecord.java
     depends_on:
       - broker
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' Coordinator"
@@ -178,6 +179,7 @@ services:
       - ./Response.java:/app/Response.java
       - ./MessagePackUtil.java:/app/MessagePackUtil.java
       - ./ServerRecord.java:/app/ServerRecord.java
+      - ./PublicationRecord.java:/app/PublicationRecord.java
     depends_on:
       - broker
       - proxy
@@ -188,3 +190,5 @@ services:
       - servidorPython1
       - servidorPython2
     command: sh -c "javac -cp '/app/lib/*' /app/*.java && java -cp '/app:/app/lib/*' cliente bot-java-1"
+
+    
