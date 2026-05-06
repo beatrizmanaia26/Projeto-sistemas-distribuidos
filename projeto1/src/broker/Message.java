@@ -1,8 +1,11 @@
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 public class Message {
     @JsonProperty("type")
-    private String type;  // "login", "create_channel", "publish", etc
+    private String type;  // "login", "create_channel", "publish", "sync_data", "sync_ack", etc
     
     @JsonProperty("timestamp")
     private long timestamp;  // Timestamp obrigatório
@@ -31,6 +34,22 @@ public class Message {
     
     @JsonProperty("clock_offset")
     private long clockOffset;  // Diferença de relógio para sincronização Berkeley
+    
+    // PARTE 5: Campos para replicação de dados (Consistência Eventual)
+    @JsonProperty("server_name")
+    private String serverName;  
+    
+    @JsonProperty("server_rank")
+    private int serverRank;  // Rank do servidor para resolução de conflitos
+    
+    @JsonProperty("publications")
+    private List<PublicationRecord> publications;  // publicações para sincronizar
+    
+    @JsonProperty("channels")
+    private Set<String> channels;  //canais para sincronizar
+    
+    @JsonProperty("users")
+    private Map<String, Long> users; 
     
     public Message() {
         this.timestamp = System.currentTimeMillis();
@@ -71,4 +90,20 @@ public class Message {
     
     public long getClockOffset() { return clockOffset; }
     public void setClockOffset(long clockOffset) { this.clockOffset = clockOffset; }
+    
+    // para replicação
+    public String getServerName() { return serverName; }
+    public void setServerName(String serverName) { this.serverName = serverName; }
+    
+    public int getServerRank() { return serverRank; }
+    public void setServerRank(int serverRank) { this.serverRank = serverRank; }
+    
+    public List<PublicationRecord> getPublications() { return publications; }
+    public void setPublications(List<PublicationRecord> publications) { this.publications = publications; }
+    
+    public Set<String> getChannels() { return channels; }
+    public void setChannels(Set<String> channels) { this.channels = channels; }
+    
+    public Map<String, Long> getUsers() { return users; }
+    public void setUsers(Map<String, Long> users) { this.users = users; }
 }

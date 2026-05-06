@@ -22,6 +22,11 @@ public class servidor {
     private static volatile boolean syncResponseReceived = false;  // Flag para detectar resposta de sincronização
     private static final long SYNC_TIMEOUT = 3000;  // Timeout de 3 segundos para sincronização
     
+    // Variáveis para replicação de dados (Consistência Eventual)
+    private static int replicationMessageCount = 0;  // contador para replicação (a cada 20 mensagens)
+    private static final int REPLICATION_INTERVAL = 20;  
+    private static Set<String> processedPublicationIds = new HashSet<>();  // IDs de publicações já processadas 
+    
     // Dados em memória
     private static Set<String> usuariosLogados = new HashSet<>();
     private static Map<String, Long> timestampsLogin = new HashMap<>();
@@ -131,6 +136,12 @@ public class servidor {
                                 handleSyncResponse(msg);
                             } else if ("sync_update".equals(msg.getType())) {
                                 handleSyncUpdate(msg);
+                            } else if ("sync_data".equals(msg.getType())) {
+                                // Processar dados de replicação
+                                handleSyncData(msg);
+                            } else if ("sync_ack".equals(msg.getType())) {
+                                // Processar ACK de replicação
+                                handleSyncAck(msg);
                             }
                         }
                         
@@ -249,6 +260,14 @@ public class servidor {
                                             }
                                         }).start();
                                         syncMessageCount = 0;
+                                    }
+                                    
+                                    // replicar dados a cada 20 mensagens (Consistência Eventual)
+                                    replicationMessageCount++;
+                                    if (replicationMessageCount >= REPLICATION_INTERVAL) {
+                                        System.out.println("\n[REPLICAÇÃO] " + REPLICATION_INTERVAL + " mensagens processadas, replicando dados...");
+                                        replicateDataToServers();
+                                        replicationMessageCount = 0;
                                     }
                                 }
                             }
@@ -380,9 +399,12 @@ public class servidor {
             publisherSocket.sendMore(channelName);
             publisherSocket.send(pubBytes, 0);
             
-            // Registrar publicação
+            // Registrar publicação com relógio lógico e rank do servidor
             PublicationRecord record = new PublicationRecord(username, channelName, content, msg.getTimestamp());
+            record.setLogicalClock(logicalClock);  
+            record.setServerRank(serverRank);    
             publicacoes.add(record);
+            processedPublicationIds.add(record.getId()); 
             
             // Persistir
             salvarDados();
@@ -467,6 +489,15 @@ public class servidor {
                 publicacoes = (List<PublicationRecord>) publicationsInputStream.readObject();
                 publicationsInputStream.close();
                 System.out.println("Publicações carregadas: " + publicacoes.size());
+                
+                // Reconstruir conjunto de IDs processados para deduplicação
+                processedPublicationIds.clear();
+                for (PublicationRecord pub : publicacoes) {
+                    if (pub.getId() != null) {
+                        processedPublicationIds.add(pub.getId());
+                    }
+                }
+                System.out.println("IDs de publicações processadas: " + processedPublicationIds.size());
             }
         } catch (Exception e) {
             System.err.println("Erro ao carregar: " + e.getMessage());
@@ -1127,5 +1158,194 @@ public class servidor {
         
       
         System.out.println("[BERKELEY] Relógio ajustado (simulado)");
+    }
+ 
+    // Replicar dados para todos os servidores conhecidos, envia publicações, canais e usuários via tópico "servers"
+     
+    private static void replicateDataToServers() {
+        if (knownServers.isEmpty()) {
+            System.out.println("[REPLICAÇÃO] Nenhum servidor conhecido para replicar");
+            return;
+        }
+        
+        try {
+            // Criar mensagem com dados para replicação
+            Message syncMsg = new Message("sync_data");
+            syncMsg.setServerName(serverName);
+            syncMsg.setServerRank(serverRank);
+            syncMsg.setLogicalClock(logicalClock);
+            
+            // Copiar dados atuais
+            synchronized (publicacoes) {
+                syncMsg.setPublications(new ArrayList<>(publicacoes));
+            }
+            synchronized (canais) {
+                syncMsg.setChannels(new HashSet<>(canais));
+            }
+            synchronized (timestampsLogin) {
+                syncMsg.setUsers(new HashMap<>(timestampsLogin));
+            }
+            
+            // Incrementar relógio antes de enviar
+            logicalClock++;
+            syncMsg.setLogicalClock(logicalClock);
+            
+            // Publicar no tópico "servers"
+            byte[] msgBytes = MessagePackUtil.serialize(syncMsg);
+            serverPubSocket.send(msgBytes, 0);
+            
+            System.out.println("[REPLICAÇÃO] Dados enviados para replicação:");
+            System.out.println("  - Publicações: " + syncMsg.getPublications().size());
+            System.out.println("  - Canais: " + syncMsg.getChannels().size());
+            System.out.println("  - Usuários: " + syncMsg.getUsers().size());
+            System.out.println("  - Relógio Lógico: " + logicalClock);
+            
+        } catch (Exception e) {
+            System.err.println("[REPLICAÇÃO] Erro ao replicar dados: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    // Processar dados recebidos de outro servidor (sync_data)
+    
+    private static void handleSyncData(Message msg) {
+        try {
+            String senderName = msg.getServerName();
+            int senderRank = msg.getServerRank();
+            long senderClock = msg.getLogicalClock();
+            
+            System.out.println("\n[REPLICAÇÃO] Dados recebidos de: " + senderName + " (rank=" + senderRank + ", clock=" + senderClock + ")");
+            
+            // Atualizar relógio lógico
+            if (senderClock > logicalClock) {
+                logicalClock = senderClock + 1;
+            } else {
+                logicalClock++;
+            }
+            
+            // Merge de publicações
+            if (msg.getPublications() != null) {
+                int newPubs = mergePublications(msg.getPublications(), senderRank);
+                System.out.println("[REPLICAÇÃO] Publicações mescladas: " + newPubs + " novas");
+            }
+            
+            // Merge de canais
+            if (msg.getChannels() != null) {
+                int newChannels = mergeChannels(msg.getChannels());
+                System.out.println("[REPLICAÇÃO] Canais mesclados: " + newChannels + " novos");
+            }
+            
+            // Merge de usuários
+            if (msg.getUsers() != null) {
+                int newUsers = mergeUsers(msg.getUsers());
+                System.out.println("[REPLICAÇÃO] Usuários mesclados: " + newUsers + " novos");
+            }
+            
+            // Salvar dados atualizados
+            salvarDados();
+            
+            // Enviar ACK
+            Message ackMsg = new Message("sync_ack");
+            ackMsg.setServerName(serverName);
+            ackMsg.setServerRank(serverRank);
+            logicalClock++;
+            ackMsg.setLogicalClock(logicalClock);
+            
+            byte[] ackBytes = MessagePackUtil.serialize(ackMsg);
+            serverPubSocket.send(ackBytes, 0);
+            
+            System.out.println("[REPLICAÇÃO] ACK enviado para " + senderName);
+            
+        } catch (Exception e) {
+            System.err.println("[REPLICAÇÃO] Erro ao processar sync_data: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+    
+    // Merge de publicações com deduplicação e resolução de conflitos
+  
+    private static int mergePublications(List<PublicationRecord> receivedPubs, int senderRank) {
+        int newCount = 0;
+        
+        synchronized (publicacoes) {
+            for (PublicationRecord pub : receivedPubs) {
+                // Verificar se já processamos esta publicação (deduplicação por ID)
+                if (!processedPublicationIds.contains(pub.getId())) {
+                    // Adicionar publicação
+                    publicacoes.add(pub);
+                    processedPublicationIds.add(pub.getId());
+                    newCount++;
+                    
+                    System.out.println("[REPLICAÇÃO] Nova publicação: " + pub.getId().substring(0, 8) +
+                                     " - " + pub.getUsername() + " em " + pub.getChannelName());
+                }
+            }
+            
+            // Ordenar publicações por relógio lógico (e timestamp como desempate)
+            publicacoes.sort((p1, p2) -> {
+                int clockCompare = Long.compare(p1.getLogicalClock(), p2.getLogicalClock());
+                if (clockCompare != 0) return clockCompare;
+                
+                int timestampCompare = Long.compare(p1.getTimestamp(), p2.getTimestamp());
+                if (timestampCompare != 0) return timestampCompare;
+                
+                // Se tudo igual, usar rank do servidor como desempate final
+                return Integer.compare(p1.getServerRank(), p2.getServerRank());
+            });
+        }
+        
+        return newCount;
+    }
+    
+    // Merge de canais (união simples)
+    private static int mergeChannels(Set<String> receivedChannels) {
+        int newCount = 0;
+        
+        synchronized (canais) {
+            for (String channel : receivedChannels) {
+                if (canais.add(channel)) {
+                    newCount++;
+                    System.out.println("[REPLICAÇÃO] Novo canal: " + channel);
+                }
+            }
+        }
+        
+        return newCount;
+    }
+    
+    // Merge de usuários (mantém o timestamp mais antigo)
+    private static int mergeUsers(Map<String, Long> receivedUsers) {
+        int newCount = 0;
+        
+        synchronized (timestampsLogin) {
+            for (Map.Entry<String, Long> entry : receivedUsers.entrySet()) {
+                String username = entry.getKey();
+                Long receivedTimestamp = entry.getValue();
+                
+                if (!timestampsLogin.containsKey(username)) {
+                    // Novo usuário
+                    timestampsLogin.put(username, receivedTimestamp);
+                    usuariosLogados.add(username);
+                    newCount++;
+                    System.out.println("[REPLICAÇÃO] Novo usuário: " + username);
+                } else {
+                    // Usuário já existe - manter o timestamp mais antigo (primeiro login)
+                    Long existingTimestamp = timestampsLogin.get(username);
+                    if (receivedTimestamp < existingTimestamp) {
+                        timestampsLogin.put(username, receivedTimestamp);
+                        System.out.println("[REPLICAÇÃO] Timestamp atualizado para " + username);
+                    }
+                }
+            }
+        }
+        
+        return newCount;
+    }
+    
+    // Processar ACK de sincronização
+
+    private static void handleSyncAck(Message msg) {
+        String senderName = msg.getServerName();
+        System.out.println("[REPLICAÇÃO] ACK recebido de: " + senderName);
     }
 }
