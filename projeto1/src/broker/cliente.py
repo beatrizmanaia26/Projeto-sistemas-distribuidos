@@ -37,11 +37,12 @@ class Response:
     channels: list = None
     publication_status: str = ""
     logical_clock: int = 0
-    rank: int = 0
+    server_rank: int = 0
     current_time: int = 0
     server_list: list = None
     coordinator_name: str = ""
     clock_offset: int = 0
+    rank: int = 0
     @staticmethod
     def unpack(data: bytes) -> "Response":
         d = msgpack.unpackb(data)

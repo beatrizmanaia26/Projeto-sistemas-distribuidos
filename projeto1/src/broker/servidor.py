@@ -23,6 +23,8 @@ class Message:
     coordinator_name: str = ""
     clock_offset: int = 0
     success: bool = False
+    rank: int = 0
+    #server_rank: int = 0
     @staticmethod
     def unpack(data: bytes) -> "Message":
         d = msgpack.unpackb(data, raw=False)
@@ -38,6 +40,7 @@ class Response:
     channels: list = None
     publication_status: str = ""
     logical_clock: int = 0
+    #server_rank: int = 0
     rank: int = 0
     current_time: int = 0
     server_list: list = None
@@ -185,7 +188,7 @@ def synchronize_clocks():
 
 def request_sync_from_coordinator():
     """Servidor comum pede hora ao coordenador via REQ/REP."""
-    global sync_response_received
+    global sync_response_received, known_servers
     if current_coordinator is None:
         return False
     # Descobrir endereço do coordenador (ele está na lista de servidores)
@@ -254,7 +257,7 @@ def start_election():
 
     for s in known_servers:
         peer_rank = s.get("rank", 0)
-        if peer_rank <= server_rank:
+        if peer_rank <= server_rank: # mandar apenas para servidores com rank maior, senão, continua até achar um de maior rank
             continue
         sent_to_higher = True
         addr = get_server_address(peer_rank)
@@ -297,17 +300,16 @@ def start_election():
 
     print("[ELEIÇÃO] OK recebido. Aguardando anúncio por 6s...", flush=True)
     announced = coordinator_announced.wait(timeout=6.0)
-    if announced and current_coordinator is not None and current_coordinator != server_name:
-        print(f"[ELEIÇÃO] Coordenador eleito: {current_coordinator}", flush=True)
-        with election_lock:
-            election_in_progress = False
+    with election_lock:
+        already_has_coord = (current_coordinator is not None and current_coordinator != server_name)
+    if already_has_coord:
+        print(f"[ELEIÇÃO] Coordenador já eleito: {current_coordinator}", flush=True)
+        election_in_progress = False
     else:
-        print("ESSE É O COORDENADOR: ",current_coordinator)
-        print("[ELEIÇÃO] Sem anúncio, me tornando coordenador.", flush=True)
         become_coordinator()
 
 def become_coordinator():
-    global election_in_progress, current_coordinator, is_coordinator
+    global election_in_progress, current_coordinator, is_coordinator, known_servers
 
     time.sleep(1.0)
     with election_lock:
@@ -315,9 +317,16 @@ def become_coordinator():
             print(f"[ELEIÇÃO] Outro já é coordenador: {current_coordinator}", flush=True)
             election_in_progress = False
             return
+        if not election_in_progress:
+            return  
         is_coordinator = True
         current_coordinator = server_name
         election_in_progress = False
+        for server in known_servers:
+            if server.get('rank') > server_rank:
+                print(f"[ELEIÇÃO] Servidor com rank maior existe: {server.get('name')} (rank={server.get('rank')}), não me torno coordenador")
+                electionInProgress = False
+                return
 
     print(f"\n[COORDENADOR] *** EU SOU O NOVO COORDENADOR *** rank={server_rank}", flush=True)
 
@@ -336,9 +345,9 @@ def become_coordinator():
     print("[COORDENADOR] Anúncio publicado no PUB/SUB.", flush=True)
 
     # 2) Enviar via REQ/REP para cada servidor conhecido (redundância)
-    announce_coordinator()
+   #announce_coordinator()
 
-def announce_coordinator():
+'''def announce_coordinator():
     print("[COORDENADOR] Anunciando via REQ/REP...", flush=True)
     for s in known_servers:
         peer_rank = s.get("rank")
@@ -364,10 +373,10 @@ def announce_coordinator():
         except zmq.error.Again:
             print(f"[COORDENADOR] Sem resposta de {s.get('name')}", flush=True)
         finally:
-            sock.close()
+            sock.close()'''
 
 # ============ THREADS ============
-def rep_election_thread():
+'''def rep_election_thread():
     global current_coordinator, is_coordinator, election_in_progress
     """Thread para responder requisições de eleição e sincronização via REP."""
     print("[REP] Thread iniciada.", flush=True)
@@ -431,7 +440,7 @@ def rep_election_thread():
                     "timestamp": int(datetime.now().timestamp() * 1000),
                 }))
         except Exception as e:
-            print(f"[REP] Erro: {e}", flush=True)
+            print(f"[REP] Erro: {e}", flush=True)'''
 
 def sub_server_thread():
     """Thread para receber mensagens do tópico 'servers' (PUB/SUB)."""
@@ -461,8 +470,9 @@ def sub_server_thread():
                 elif msg.type == "coordinator":
                     current_coordinator = msg.coordinator_name
                     is_coordinator = (server_name == current_coordinator)
-                    election_in_progress = False
                     coordinator_announced.set()
+                    election_in_progress = False
+                    
                     print(f"[ELEIÇÃO] Coordenador recebido via PUB/SUB: {current_coordinator}", flush=True)
 
                 elif msg.type == "election_ok" and msg.election_id > server_rank:
@@ -514,7 +524,7 @@ request_rank()
 known_servers = get_server_list()
 
 # Inicia threads de comunicação entre servidores
-threading.Thread(target=rep_election_thread, daemon=True).start()
+#threading.Thread(target=rep_election_thread, daemon=True).start() Tirando anúncio de eleição com REQ/REP PQ É BESTA, NÉ, JAMANTA
 threading.Thread(target=sub_server_thread, daemon=True).start()
 time.sleep(1)  # aguarda assinatura se firmar
 

@@ -71,7 +71,6 @@ services:
       - broker
       - proxy
       - coordinator
-      - servidorPython1
     command: sh -c "sleep 5 && python /app/main.py 6004"
   clientePython:
     image: broker-pyzmq:latest
